@@ -195,6 +195,19 @@ async function runKeeperRunner({ rpcUrl, manifestPath, action, env, decisionArgs
   });
 }
 
+async function runKeeperDecisions({ rpcUrl, manifestPath, decisionArgs = [] }) {
+  const raw = await run(process.execPath, [
+    "ops/keeper-decisions.mjs",
+    "--json",
+    "--manifest",
+    manifestPath,
+    "--rpc",
+    rpcUrl,
+    ...decisionArgs,
+  ]);
+  return JSON.parse(raw);
+}
+
 async function castSend(rpcUrl, privateKey, to, signature, args = [], options = {}) {
   const sendArgs = [
     "send",
@@ -470,6 +483,21 @@ async function runLiveSmoke(args) {
 
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
     const { contracts, series } = manifest;
+    const topology = (await fs.readFile(registryPath, "utf8")).trim();
+
+    await castSend(
+      rpcUrl,
+      args.deployerPrivateKey,
+      topology,
+      "seedInventoryMarket(bool,bool,uint256,uint256,address)",
+      [true, true, wei("1"), wei("1"), roles.deployer],
+      { value: wei("2") },
+    );
+    record("Second-series N inventory AMM seeded", {
+      market: manifest.inventoryMarkets?.secondN,
+      tokenAmountWei: wei("1").toString(),
+      marketEthWei: wei("1").toString(),
+    });
 
     await castSend(rpcUrl, args.lpPrivateKey, contracts.lpVault, "deposit()", [], { value: wei("1000") });
     const managedAtStart = await readManagedAssets(rpcUrl, contracts.lpVault);
@@ -653,6 +681,45 @@ async function runLiveSmoke(args) {
     record(args.noSolverLaunch ? "ETH LP vault cleared the roll" : "ETH LP vault backstopped the remaining roll", {
       auctionId: auctionId.toString(),
       maxFillEth: args.noSolverLaunch ? "1.0" : "0.6",
+    });
+
+    await runKeeperRunner({
+      rpcUrl,
+      manifestPath,
+      action: "lp-inventory-merge",
+      env: { INVENTORY_KEEPER_PRIVATE_KEY: args.keeperPrivateKey },
+    });
+    record("ETH LP vault merged matched residual inventory", { auctionId: auctionId.toString() });
+
+    const liquidityDecision = await runKeeperDecisions({
+      rpcUrl,
+      manifestPath,
+      decisionArgs: ["--max-inventory-liquidity-eth", "0.2"],
+    });
+    const addLiquidityAction = (liquidityDecision.actions || []).find((action) => (
+      action.type === "lp-inventory-add-liquidity" &&
+      action.ready === true &&
+      action.market?.toLowerCase() === manifest.inventoryMarkets?.secondN?.toLowerCase()
+    ));
+    if (!addLiquidityAction) {
+      throw new Error("Expected ready lp-inventory-add-liquidity action for seeded second-series N market");
+    }
+    record("Keeper decisions surfaced vault AMM-liquidity action", {
+      market: addLiquidityAction.market,
+      amount: addLiquidityAction.amount,
+      ethToAdd: addLiquidityAction.ethToAdd,
+    });
+
+    await runKeeperRunner({
+      rpcUrl,
+      manifestPath,
+      action: "lp-inventory-add-liquidity",
+      env: { INVENTORY_KEEPER_PRIVATE_KEY: args.keeperPrivateKey },
+      decisionArgs: ["--max-inventory-liquidity-eth", "0.2"],
+    });
+    record("ETH LP vault added inventory as public AMM liquidity", {
+      market: addLiquidityAction.market,
+      amount: addLiquidityAction.amount,
     });
 
     const solverReportRaw = await run(process.execPath, [

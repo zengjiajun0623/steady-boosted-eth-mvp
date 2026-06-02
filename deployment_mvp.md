@@ -340,6 +340,8 @@ ETH LP vault backstop bids through EthLPVaultKeeper
 ETH LP vault matched-inventory merges through EthLPVaultKeeper
 ETH LP vault settled-inventory redeems through EthLPVaultKeeper
 ETH LP vault residual tracked-inventory sells through matching ETH/token AMMs
+ETH LP vault residual tracked-inventory pairs with ETH as matching AMM liquidity
+ETH LP vault owned AMM LP shares are removed before strategy close
 wrapper startRoll when the full idle inventory can move to the next series
 wrapper finalizeRoll when a roll auction is fully filled
 wrapper resetRoll when an auction expires or crosses the stale price-drop threshold with inventory left
@@ -364,8 +366,9 @@ The runner `--max-price-wad` remains a hard cap even when a model asks for a
 higher price. The included `ops/solver-model-spread.mjs` is a simple reference
 model that treats a 1:1 roll as fair, waits for `SOLVER_EDGE_BPS` of edge, and
 optionally caps size with `SOLVER_MAX_FILL_ETH`. Use `--max-inventory-sell-eth`
-to cap each ETH LP vault cleanup suggestion and `--inventory-slippage-bps` to
-set the minimum ETH-out buffer for residual AMM sells. The script marks solver,
+to cap each ETH LP vault sale suggestion, `--max-inventory-liquidity-eth` to cap
+each AMM-liquidity token side, and `--inventory-slippage-bps` to set min-out
+buffers for residual AMM sells and liquidity removal. The script marks solver,
 LP, and wrapper-start actions as not
 ready if they would violate the current circuit-breaker level, auction dust
 threshold, product roll-size cap, global active-auction ceiling, or wrapper
@@ -643,16 +646,19 @@ Useful action filters:
 ```text
 solver -> solver-bid
 wrapper -> wrapper-start-roll, wrapper-finalize-roll, wrapper-reset-roll, wrapper-cancel-roll
-lp -> lp-backstop-bid, lp-inventory-merge, lp-inventory-redeem, lp-inventory-sell
-inventory -> lp-inventory-merge, lp-inventory-redeem, lp-inventory-sell
+lp -> lp-backstop-bid, lp-inventory-merge, lp-inventory-redeem, lp-inventory-sell, lp-inventory-add-liquidity, lp-inventory-remove-liquidity
+inventory -> lp-inventory-merge, lp-inventory-redeem, lp-inventory-sell, lp-inventory-add-liquidity, lp-inventory-remove-liquidity
 all -> every ready executable action
 ```
 
 For LP inventory cleanup, the helper uses direct paths before AMMs. Matched
 unsettled P+N inventory is merged back to ETH, and settled inventory is redeemed
 back to ETH. For remaining unpaired inventory, add optional direct P/N market
-addresses to the manifest. The helper verifies each AMM's `token()` before suggesting a
-`sellInventory(...)` command, and it will not suggest an AMM sale whose quote is
+addresses to the manifest. The helper verifies each AMM's `token()` before
+suggesting `sellInventory(...)` or `addInventoryLiquidity(...)`, and it will not
+suggest an AMM sale or AMM-liquidity add below the vault's floor. If the vault
+already owns AMM LP shares, the helper suggests `removeInventoryLiquidity(...)`
+before strategy close.
 below the ETH LP vault's immutable inventory-sale floor:
 
 ```json

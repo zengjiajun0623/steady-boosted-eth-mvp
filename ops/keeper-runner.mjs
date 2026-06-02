@@ -12,9 +12,32 @@ const ACTION_ALIASES = {
   solver: ["solver-bid"],
   settlement: ["settle-series"],
   wrapper: ["wrapper-start-roll", "wrapper-finalize-roll", "wrapper-reset-roll", "wrapper-cancel-roll"],
-  lp: ["lp-backstop-bid", "lp-inventory-merge", "lp-inventory-redeem", "lp-inventory-sell", "lp-inventory-close"],
-  vault: ["lp-backstop-bid", "lp-inventory-merge", "lp-inventory-redeem", "lp-inventory-sell", "lp-inventory-close"],
-  inventory: ["lp-inventory-merge", "lp-inventory-redeem", "lp-inventory-sell", "lp-inventory-close"],
+  lp: [
+    "lp-backstop-bid",
+    "lp-inventory-merge",
+    "lp-inventory-redeem",
+    "lp-inventory-sell",
+    "lp-inventory-add-liquidity",
+    "lp-inventory-remove-liquidity",
+    "lp-inventory-close",
+  ],
+  vault: [
+    "lp-backstop-bid",
+    "lp-inventory-merge",
+    "lp-inventory-redeem",
+    "lp-inventory-sell",
+    "lp-inventory-add-liquidity",
+    "lp-inventory-remove-liquidity",
+    "lp-inventory-close",
+  ],
+  inventory: [
+    "lp-inventory-merge",
+    "lp-inventory-redeem",
+    "lp-inventory-sell",
+    "lp-inventory-add-liquidity",
+    "lp-inventory-remove-liquidity",
+    "lp-inventory-close",
+  ],
 };
 
 function usage() {
@@ -41,6 +64,7 @@ Decision options are passed to keeper-decisions.mjs, for example:
   --max-price-wad <wad>
   --max-fill-eth <eth>
   --max-inventory-sell-eth <eth>
+  --max-inventory-liquidity-eth <eth>
   --inventory-slippage-bps <bps>
   --solver-model <path>
   --recipient <address>
@@ -53,7 +77,8 @@ Examples:
   node ops/keeper-runner.mjs --rpc http://127.0.0.1:8545 --action wrapper
   SETTLEMENT_RUNNER_PRIVATE_KEY=0x... node ops/keeper-runner.mjs --execute --action settlement --rpc $RPC_URL
   SOLVER_PRIVATE_KEY=0x... node ops/keeper-runner.mjs --execute --action solver --rpc $RPC_URL --recipient 0x... --max-price-wad 999000000000000000 --solver-model ops/solver-model-spread.mjs
-  node ops/keeper-runner.mjs --execute --action lp-inventory-sell --interval 30 --rpc $RPC_URL`;
+  node ops/keeper-runner.mjs --execute --action lp-inventory-sell --interval 30 --rpc $RPC_URL
+  node ops/keeper-runner.mjs --execute --action lp-inventory-add-liquidity --rpc $RPC_URL`;
 }
 
 function parseArgs(argv) {

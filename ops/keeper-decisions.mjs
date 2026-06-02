@@ -20,6 +20,9 @@ const SELECTORS = {
   minStaleResetDelay: "0xd7286b7b",
   minStaleResetPriceDropBps: "0x046431d8",
   ammToken: "0xfc0c546a",
+  ammEthReserve: "0xd62ccb3f",
+  ammTokenReserve: "0xcbcb3171",
+  ammLpToken: "0x5fcbd285",
   activeStrategyEth: "0x3271f123",
   auctions: "0x571a26a0",
   balanceOf: "0x70a08231",
@@ -32,6 +35,8 @@ const SELECTORS = {
   healthAuction: "0x71ea82c9",
   inventorySeries: "0x8788f42b",
   inventorySeriesLength: "0x99b97012",
+  inventoryMarkets: "0xd81248d8",
+  inventoryMarketsLength: "0x986c578e",
   managedAssets: "0xf4a0877f",
   maxActiveStrategyEth: "0x7442e57e",
   maxAuctionPriceDropBps: "0x1e51dda4",
@@ -40,7 +45,9 @@ const SELECTORS = {
   minInventorySalePriceWad: "0x53127954",
   minBackstopDelay: "0x101cbba4",
   minAuctionTimeLeft: "0xdade311a",
+  openInventoryMarketCount: "0xc45445cd",
   quoteSellToken: "0x80870de0",
+  totalSupply: "0x18160ddd",
 };
 
 const WRAPPER_DEFAULTS = {
@@ -81,8 +88,10 @@ Options:
   --max-fill-eth <eth>       Max auction size to suggest per fill (default: full remaining)
   --max-inventory-sell-eth <eth>
                               Max LP vault inventory cleanup per suggestion
+  --max-inventory-liquidity-eth <eth>
+                              Max LP vault AMM-liquidity token side per suggestion
   --inventory-slippage-bps <bps>
-                              Min ETH out buffer for LP inventory AMM sells (default: 50)
+                              Min-out buffer for LP inventory AMM sells/liquidity (default: 50)
   --start-price-wad <wad>    Wrapper start-roll price (default: per product)
   --floor-price-wad <wad>    Wrapper floor price (default: per product)
   --duration <seconds>       Wrapper roll duration (default: 86400)
@@ -114,6 +123,7 @@ function parseArgs(argv) {
     maxPriceWad: WAD,
     maxFillWei: null,
     maxInventorySellWei: null,
+    maxInventoryLiquidityWei: null,
     inventorySlippageBps: 50,
     startPriceWad: null,
     floorPriceWad: null,
@@ -151,6 +161,8 @@ function parseArgs(argv) {
       args.maxFillWei = ethToWei(next());
     } else if (arg === "--max-inventory-sell-eth") {
       args.maxInventorySellWei = ethToWei(next());
+    } else if (arg === "--max-inventory-liquidity-eth") {
+      args.maxInventoryLiquidityWei = ethToWei(next());
     } else if (arg === "--inventory-slippage-bps") {
       args.inventorySlippageBps = Number(next());
       if (!Number.isInteger(args.inventorySlippageBps) || args.inventorySlippageBps < 0 || args.inventorySlippageBps > 10_000) {
@@ -463,6 +475,8 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     minAuctionTimeLeftRaw,
     maxAuctionPriceDropRaw,
     minInventorySalePriceRaw,
+    inventoryMarketsLengthRaw,
+    openInventoryMarketCountRaw,
   ] = await Promise.all([
     ethCall(rpcUrl, lpVault, SELECTORS.maxRollPriceWad),
     ethCall(rpcUrl, lpVault, SELECTORS.maxEthPerRoll),
@@ -473,6 +487,8 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     ethCall(rpcUrl, lpVault, SELECTORS.minAuctionTimeLeft),
     ethCall(rpcUrl, lpVault, SELECTORS.maxAuctionPriceDropBps),
     ethCall(rpcUrl, lpVault, SELECTORS.minInventorySalePriceWad).catch(() => "0x"),
+    ethCall(rpcUrl, lpVault, SELECTORS.inventoryMarketsLength).catch(() => "0x"),
+    ethCall(rpcUrl, lpVault, SELECTORS.openInventoryMarketCount).catch(() => "0x"),
   ]);
 
   return {
@@ -485,6 +501,8 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     minAuctionTimeLeft: decodeUint(minAuctionTimeLeftRaw),
     maxAuctionPriceDropBps: decodeUint(maxAuctionPriceDropRaw),
     minInventorySalePriceWad: decodeUint(minInventorySalePriceRaw),
+    inventoryMarketsLength: decodeUint(inventoryMarketsLengthRaw),
+    openInventoryMarketCount: decodeUint(openInventoryMarketCountRaw),
   };
 }
 
@@ -771,6 +789,10 @@ function inventoryMarketForToken(manifest, token) {
   return inventoryMarketConfigs(manifest).find((item) => sameAddress(item.token, token)) || null;
 }
 
+function inventoryMarketForMarket(manifest, market) {
+  return inventoryMarketConfigs(manifest).find((item) => isAddress(item.market) && sameAddress(item.market, market)) || null;
+}
+
 function lpInventorySellTx(manifest, item, market, amount, minEthOut) {
   return txSpec(manifest.contracts.lpKeeper, "sellInventory(address,bytes32,bool,address,uint256,uint256)", [
     item.factory,
@@ -780,6 +802,34 @@ function lpInventorySellTx(manifest, item, market, amount, minEthOut) {
     amount,
     minEthOut,
   ]);
+}
+
+function lpInventoryAddLiquidityTx(manifest, item, market, tokenAmount, ethAmount, minShares) {
+  return txSpec(manifest.contracts.lpKeeper, "addInventoryLiquidity(address,bytes32,bool,address,uint256,uint256,uint256)", [
+    item.factory,
+    item.seriesId,
+    item.sellN,
+    market,
+    tokenAmount,
+    ethAmount,
+    minShares,
+  ]);
+}
+
+function lpInventoryRemoveLiquidityTx(manifest, config, shares, minEthOut, minTokenOut) {
+  return txSpec(
+    manifest.contracts.lpKeeper,
+    "removeInventoryLiquidity(address,bytes32,bool,address,uint256,uint256,uint256)",
+    [
+      manifest.contracts.factory,
+      config.seriesId,
+      config.sellN,
+      config.market,
+      shares,
+      minEthOut,
+      minTokenOut,
+    ],
+  );
 }
 
 function lpInventoryMergeTx(manifest, item, amount) {
@@ -951,6 +1001,61 @@ async function readLpInventoryState(rpcUrl, manifest) {
   return items.filter((item) => isAddress(item.token) && item.balance > 0n);
 }
 
+async function readInventoryMarketState(rpcUrl, market) {
+  const [tokenRaw, ethReserveRaw, tokenReserveRaw, lpTokenRaw] = await Promise.all([
+    ethCall(rpcUrl, market, SELECTORS.ammToken),
+    ethCall(rpcUrl, market, SELECTORS.ammEthReserve),
+    ethCall(rpcUrl, market, SELECTORS.ammTokenReserve),
+    ethCall(rpcUrl, market, SELECTORS.ammLpToken),
+  ]);
+  const lpToken = decodeAddress(lpTokenRaw);
+  const totalSupplyRaw = isAddress(lpToken) ? await ethCall(rpcUrl, lpToken, SELECTORS.totalSupply) : "0x";
+  return {
+    market,
+    token: decodeAddress(tokenRaw),
+    ethReserve: decodeUint(ethReserveRaw),
+    tokenReserve: decodeUint(tokenReserveRaw),
+    lpToken,
+    totalSupply: decodeUint(totalSupplyRaw),
+    hasLiquidity: decodeUint(ethReserveRaw) > 0n && decodeUint(tokenReserveRaw) > 0n,
+  };
+}
+
+async function readLpMarketPositions(rpcUrl, manifest) {
+  const vault = manifest.contracts?.lpVault;
+  if (!isAddress(vault)) return [];
+
+  let length = 0;
+  try {
+    length = Number(decodeUint(await ethCall(rpcUrl, vault, SELECTORS.inventoryMarketsLength)));
+  } catch {
+    return [];
+  }
+
+  const cappedLength = Math.min(length, 24);
+  const positions = [];
+  for (let index = 0; index < cappedLength; index += 1) {
+    const market = decodeAddress(await ethCall(rpcUrl, vault, `${SELECTORS.inventoryMarkets}${word(BigInt(index))}`));
+    if (!isAddress(market)) continue;
+
+    const config = inventoryMarketForMarket(manifest, market);
+    const state = await readInventoryMarketState(rpcUrl, market);
+    const vaultSharesRaw = isAddress(state.lpToken)
+      ? await ethCall(rpcUrl, state.lpToken, `${SELECTORS.balanceOf}${addressWord(vault)}`)
+      : "0x";
+    const vaultShares = decodeUint(vaultSharesRaw);
+    if (vaultShares === 0n) continue;
+
+    positions.push({
+      ...state,
+      index,
+      config,
+      vaultShares,
+    });
+  }
+  return positions;
+}
+
 function inventoryGroupKey(item) {
   return `${item.factory.toLowerCase()}:${item.seriesId.toLowerCase()}`;
 }
@@ -981,6 +1086,49 @@ function groupLpInventory(inventory) {
 function capInventoryAmount(amount, args) {
   if (args.maxInventorySellWei && args.maxInventorySellWei < amount) return args.maxInventorySellWei;
   return amount;
+}
+
+function capInventoryLiquidityAmount(amount, args) {
+  const cap = args.maxInventoryLiquidityWei ?? args.maxInventorySellWei;
+  if (cap && cap < amount) return cap;
+  return amount;
+}
+
+function buildLiquiditySizing(item, marketState, args, lpPolicy) {
+  if (!lpPolicy || !marketState.hasLiquidity) return null;
+  if (marketState.ethReserve === 0n || marketState.tokenReserve === 0n || marketState.totalSupply === 0n) return null;
+
+  const poolPriceWad = (marketState.ethReserve * WAD) / marketState.tokenReserve;
+  const headroom = lpPolicy.maxActiveStrategyEth > lpPolicy.activeStrategyEth
+    ? lpPolicy.maxActiveStrategyEth - lpPolicy.activeStrategyEth
+    : 0n;
+  let maxEth = lpPolicy.managedAssets < headroom ? lpPolicy.managedAssets : headroom;
+  if (maxEth === 0n) return { poolPriceWad, tokenAmount: 0n, ethAmount: 0n, minShares: 0n };
+
+  let tokenAmount = capInventoryLiquidityAmount(item.balance, args);
+  let ethAmount = mulDivUp(tokenAmount, marketState.ethReserve, marketState.tokenReserve);
+  if (ethAmount > maxEth) {
+    tokenAmount = (maxEth * marketState.tokenReserve) / marketState.ethReserve;
+    ethAmount = mulDivUp(tokenAmount, marketState.ethReserve, marketState.tokenReserve);
+  }
+  if (tokenAmount === 0n || ethAmount === 0n || ethAmount > maxEth) {
+    return { poolPriceWad, tokenAmount: 0n, ethAmount: 0n, minShares: 0n };
+  }
+
+  const expectedSharesByToken = (tokenAmount * marketState.totalSupply) / marketState.tokenReserve;
+  const expectedSharesByEth = (ethAmount * marketState.totalSupply) / marketState.ethReserve;
+  const expectedShares = expectedSharesByToken < expectedSharesByEth ? expectedSharesByToken : expectedSharesByEth;
+  const minShares = (expectedShares * BigInt(10_000 - args.inventorySlippageBps)) / 10_000n;
+  return { poolPriceWad, tokenAmount, ethAmount, minShares };
+}
+
+function buildLiquidityRemovalSizing(position, args) {
+  if (position.totalSupply === 0n || position.vaultShares === 0n) return null;
+  const ethOut = (position.vaultShares * position.ethReserve) / position.totalSupply;
+  const tokenOut = (position.vaultShares * position.tokenReserve) / position.totalSupply;
+  const minEthOut = (ethOut * BigInt(10_000 - args.inventorySlippageBps)) / 10_000n;
+  const minTokenOut = (tokenOut * BigInt(10_000 - args.inventorySlippageBps)) / 10_000n;
+  return { ethOut, tokenOut, minEthOut, minTokenOut };
 }
 
 function dustBlockedFill(sellAmount, remainingSellAmount, minSellAmount) {
@@ -1273,10 +1421,46 @@ async function buildWrapperMaintenanceActions(
   return actions;
 }
 
-async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPolicy) {
+async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPolicy, marketPositions = []) {
   const actions = [];
   const lpKeeper = manifest.contracts?.lpKeeper;
   if (!isAddress(lpKeeper)) return actions;
+
+  for (const position of marketPositions) {
+    if (!position.config) {
+      actions.push({
+        type: "inspect-lp-inventory-liquidity",
+        product: "ETH LP Vault",
+        ready: false,
+        reason: "Vault owns AMM LP shares, but the market is not mapped in the manifest inventoryMarkets section.",
+        market: position.market,
+        amount: weiToEthText(position.vaultShares),
+      });
+      continue;
+    }
+
+    const sizing = buildLiquidityRemovalSizing(position, args);
+    if (!sizing) continue;
+
+    const actionTx =
+      lpInventoryRemoveLiquidityTx(manifest, position.config, position.vaultShares, sizing.minEthOut, sizing.minTokenOut);
+    actions.push({
+      type: "lp-inventory-remove-liquidity",
+      product: "ETH LP Vault",
+      ready: true,
+      reason: "Vault owns AMM LP shares; remove them before closing strategy or redeeming the returned inventory.",
+      token: position.config.label,
+      seriesId: position.config.seriesId,
+      market: position.market,
+      amount: weiToEthText(position.vaultShares),
+      quoteEth: weiToEthText(sizing.ethOut),
+      quoteToken: weiToEthText(sizing.tokenOut),
+      minEthOut: weiToEthText(sizing.minEthOut),
+      minTokenOut: weiToEthText(sizing.minTokenOut),
+      tx: actionTx,
+      command: commandFromTx(actionTx),
+    });
+  }
 
   const grouped = groupLpInventory(inventory);
   const deferredSellGroups = new Set();
@@ -1345,8 +1529,8 @@ async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPoli
       continue;
     }
 
-    const marketToken = decodeAddress(await ethCall(rpcUrl, config.market, SELECTORS.ammToken));
-    if (!sameAddress(marketToken, item.token)) {
+    const marketState = await readInventoryMarketState(rpcUrl, config.market);
+    if (!sameAddress(marketState.token, item.token)) {
       actions.push({
         type: "inspect-lp-inventory-market",
         product: "ETH LP Vault",
@@ -1355,9 +1539,52 @@ async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPoli
         token: label,
         market: config.market,
         expectedToken: item.token,
-        actualToken: marketToken,
+        actualToken: marketState.token,
       });
       continue;
+    }
+
+    const policyMinEthOut = lpPolicy ? mulDivUp(amount, lpPolicy.minInventorySalePriceWad, WAD) : 0n;
+    const liquiditySizing = buildLiquiditySizing(item, marketState, args, lpPolicy);
+    const poolAboveFloor =
+      liquiditySizing && (!lpPolicy || liquiditySizing.poolPriceWad >= lpPolicy.minInventorySalePriceWad);
+
+    if (poolAboveFloor && liquiditySizing.tokenAmount > 0n) {
+      const actionTx = lpInventoryAddLiquidityTx(
+        manifest,
+        item,
+        config.market,
+        liquiditySizing.tokenAmount,
+        liquiditySizing.ethAmount,
+        liquiditySizing.minShares,
+      );
+      actions.push({
+        type: "lp-inventory-add-liquidity",
+        product: "ETH LP Vault",
+        ready: true,
+        reason: "Tracked inventory can be paired with vault ETH in a seeded matching AMM, supporting trader liquidity without selling below policy.",
+        token: label,
+        seriesId: item.seriesId,
+        market: config.market,
+        amount: weiToEthText(liquiditySizing.tokenAmount),
+        ethToAdd: weiToEthText(liquiditySizing.ethAmount),
+        minShares: weiToEthText(liquiditySizing.minShares),
+        poolPriceWad: liquiditySizing.poolPriceWad.toString(),
+        tx: actionTx,
+        command: commandFromTx(actionTx),
+      });
+    } else if (liquiditySizing && liquiditySizing.poolPriceWad < (lpPolicy?.minInventorySalePriceWad ?? 0n)) {
+      actions.push({
+        type: "watch-lp-inventory-liquidity",
+        product: "ETH LP Vault",
+        ready: false,
+        reason: "Matching AMM spot price is below the ETH LP vault sale floor, so the vault should not add liquidity there.",
+        token: label,
+        market: config.market,
+        amount: weiToEthText(amount),
+        poolPriceWad: liquiditySizing.poolPriceWad.toString(),
+        policyMinPriceWad: lpPolicy?.minInventorySalePriceWad?.toString(),
+      });
     }
 
     let quote;
@@ -1376,7 +1603,6 @@ async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPoli
       continue;
     }
 
-    const policyMinEthOut = lpPolicy ? mulDivUp(amount, lpPolicy.minInventorySalePriceWad, WAD) : 0n;
     if (quote < policyMinEthOut) {
       actions.push({
         type: "watch-lp-inventory-market",
@@ -1411,7 +1637,13 @@ async function buildLpInventoryActions(rpcUrl, manifest, inventory, args, lpPoli
     });
   }
 
-  if (inventory.length === 0 && lpPolicy && lpPolicy.activeStrategyEth > 0n) {
+  if (
+    inventory.length === 0 &&
+    marketPositions.length === 0 &&
+    lpPolicy &&
+    lpPolicy.activeStrategyEth > 0n &&
+    lpPolicy.openInventoryMarketCount === 0n
+  ) {
     const actionTx = lpInventoryCloseTx(manifest);
     actions.push({
       type: "lp-inventory-close",
@@ -1492,10 +1724,11 @@ async function main() {
   };
   const lpPolicy = await readLpVaultPolicy(args.rpc, manifest.contracts?.lpVault);
   const lpInventory = await readLpInventoryState(args.rpc, manifest);
+  const lpMarketPositions = await readLpMarketPositions(args.rpc, manifest);
   const actions = [
     ...buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedLevel, auctionMinSellAmount, lpPolicy),
     ...(await buildSettlementActions(args.rpc, manifest, lpInventory)),
-    ...(await buildLpInventoryActions(args.rpc, manifest, lpInventory, args, lpPolicy)),
+    ...(await buildLpInventoryActions(args.rpc, manifest, lpInventory, args, lpPolicy, lpMarketPositions)),
     ...(await buildWrapperMaintenanceActions(
       args.rpc,
       manifest,
@@ -1521,6 +1754,7 @@ async function main() {
     lpPolicy,
     wrappers,
     lpInventory,
+    lpMarketPositions,
     actions,
   };
 
@@ -1555,7 +1789,11 @@ async function main() {
     if (action.ethToMint) console.log(`ETH to mint: ${action.ethToMint}`);
     if (action.maxBuyAmount) console.log(`Max pay: ${action.maxBuyAmount}`);
     if (action.quoteEth) console.log(`Quote: ${action.quoteEth}`);
+    if (action.quoteToken) console.log(`Token quote: ${action.quoteToken}`);
+    if (action.ethToAdd) console.log(`ETH to add: ${action.ethToAdd}`);
     if (action.minEthOut) console.log(`Min ETH out: ${action.minEthOut}`);
+    if (action.minTokenOut) console.log(`Min token out: ${action.minTokenOut}`);
+    if (action.minShares) console.log(`Min shares: ${action.minShares}`);
     if (action.strategyPlan) {
       console.log(`Strategy: ${action.strategyPlan.action} (${action.strategyPlan.status})`);
       console.log(`Strategy recommendation: ${action.strategyPlan.recommendation}`);
