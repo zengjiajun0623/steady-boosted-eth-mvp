@@ -579,7 +579,7 @@ dashboards. It has no authority and does not hold funds. It packages existing
 public state into structs:
 
 ```text
-marketHealth: AMM reserves, fee, and sample buy/sell quotes
+marketHealth: optional secondary AMM reserves, fee, and sample buy/sell quotes
 lpVaultHealth: managed assets, reserved ETH, strategy utilization, pause state,
 solver-first delay, auction freshness limits, and price-decay limits
 wrapperHealth: current token, total assets, capacity, active roll auction
@@ -663,7 +663,7 @@ permissionless wrapper keeper only cancels unfilled rolls after auction duration
 permissionless wrapper keeper can reset expired partially filled rolls
 trader can buy and sell Steady wrapper shares against ETH through the ETH LP vault
 trader can buy and sell Boosted wrapper shares against ETH through the ETH LP vault
-deployer can still wire secondary AMMs to wrapper shares instead of expiring first-series tokens
+deployer can still wire optional secondary AMMs to wrapper shares instead of expiring first-series tokens
 Ethereum pilot deployer rejects non-mainnet deployment
 Ethereum pilot deployer rejects caps above the pilot limit
 deployers reject nonzero auction guardians

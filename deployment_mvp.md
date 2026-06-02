@@ -292,7 +292,7 @@ factory series maturity, settled state, settlement price, and redeemable wallet 
 For keeper and risk dashboards, read `healthLens()` and call:
 
 ```text
-marketHealth(...) -> AMM reserves, fee, sample buy/sell quotes
+marketHealth(...) -> optional secondary AMM reserves, fee, sample buy/sell quotes
 lpVaultHealth(...) -> managed ETH, reserved ETH, strategy utilization, deposit
 pause state, LP share price, solver-first delay, auction freshness limits, and price-decay limits
 lpInventoryHealth(...) -> tracked LP vault P/N balances, mergeable paired amount,
@@ -420,16 +420,16 @@ node ops/readiness-check.mjs \
 ```
 
 The checker reads only public state. It verifies deployed bytecode, live
-Steady/Boosted trader market reserves and sample quotes, LP vault manager and
-backstop policy, LP vault inventory visibility, wrapper keeper wiring, auction
+vault-backed Steady/Boosted buy/sell quotes, LP vault manager and backstop
+policy, LP vault inventory visibility, wrapper keeper wiring, auction
 circuit-breaker state, solver helper availability, settlement oracle wiring,
 first/second series compatibility for normal wrapper rolls, per-series cap
 usage, wrapper deposit capacity staying inside the keeper roll cap, live cap
 alignment against committed LP/Boosted/solver liquidity, and a decentralized
 liveness gate across the trader, LP, solver, wrapper-keeper, auction, and
-settlement surfaces. The
-default gate warns if the LP vault has less than `0.1 ETH` managed because
-trader markets can be live while the roll backstop is still unfunded.
+settlement surfaces. The default gate warns if the LP vault has less than
+`0.1 ETH` managed because the Protocol ETH Liquidity Vault is the required
+trader route and roll backstop.
 
 For a broader pre-launch check that includes the local contract suite, demo and
 runner syntax, Maker-style auction/reset paths, and historical capacity
@@ -476,11 +476,11 @@ node ops/readiness-check.mjs \
   --strict
 ```
 
-The readiness capacity section uses visible Boosted AMM ETH plus the explicit
-Boosted/solver commitments above. It compares that against the Steady wrapper
-roll cap, Boosted wrapper roll cap, and factory series cap using the same
-historical N-demand ratios documented below. This is still a public readiness
-gate, not an onchain market-demand oracle.
+The readiness capacity section uses visible secondary Boosted AMM ETH, if any,
+plus the explicit Boosted/solver commitments above. It compares that against the
+Steady wrapper roll cap, Boosted wrapper roll cap, and factory series cap using
+the same historical N-demand ratios documented below. This is still a public
+readiness gate, not an onchain market-demand oracle.
 
 For a small no-solver launch, pass `--no-solver-launch` and size the product by
 LP-vault capital alone. This is the Hyperliquid-style bootstrap path: the ETH LP

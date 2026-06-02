@@ -16,6 +16,9 @@ const SELECTORS = {
   healthSeries: "0x43f7b47e",
   healthAuctionPolicy: "0x6984f01e",
   healthWrapperKeeper: "0xf524fbca",
+  quoteBuyProduct: "0x7bcea1f9",
+  quoteSellProduct: "0x4994d34b",
+  productTradeFeeBps: "0x67f0fe8a",
   lpKeeperVault: "0xfbfa77cf",
   lpKeeperSteadyRollSeller: "0x94aaed33",
   lpKeeperBoostedRollSeller: "0xa6a8d265",
@@ -66,8 +69,6 @@ const REQUIRED_CONTRACTS = [
   "boostedKeeper",
   "steadyVault",
   "boostedVault",
-  "steadyMarket",
-  "boostedMarket",
 ];
 
 const REQUIRED_SERIES = ["firstSeriesId", "secondSeriesId", "firstP", "firstN", "secondP", "secondN"];
@@ -80,10 +81,11 @@ Options:
   --manifest <path>          Manifest path (default: ${DEFAULT_MANIFEST})
   --json                     Print machine-readable JSON
   --strict                   Exit nonzero on warnings as well as failures
-  --min-market-eth <eth>     Minimum ETH reserve per trader AMM (default: 0.1)
+  --min-market-eth <eth>     Minimum ETH reserve per optional secondary AMM (default: 0.1)
   --min-lp-eth <eth>         Minimum managed ETH in LP vault (default: 0.1)
-  --sample-trade-eth <eth>   Sample market quote size (default: 0.01)
-  --max-market-fee-bps <n>   Maximum acceptable trader AMM fee (default: 100)
+  --sample-trade-eth <eth>   Sample vault-backed trader quote size (default: 0.01)
+  --max-market-fee-bps <n>   Maximum acceptable optional secondary AMM fee (default: 100)
+  --max-trade-fee-bps <n>    Maximum acceptable Protocol ETH Liquidity Vault trader fee (default: 100)
   --max-cap-used-bps <n>     Warn when a series cap is above this usage (default: 9000)
   --max-normal-roll-cost-bps <n>
                              Maximum normal wrapper roll floor cost (default: 10)
@@ -123,6 +125,7 @@ function parseArgs(argv) {
     minLpEthWei: ethToWei("0.1"),
     sampleTradeEthWei: ethToWei("0.01"),
     maxMarketFeeBps: 100,
+    maxTradeFeeBps: 100,
     maxCapUsedBps: 9_000,
     maxNormalRollCostBps: 10,
     maxLpRollPremiumBps: 0,
@@ -166,6 +169,8 @@ function parseArgs(argv) {
       args.sampleTradeEthWei = ethToWei(next());
     } else if (arg === "--max-market-fee-bps") {
       args.maxMarketFeeBps = parseInteger(next(), arg);
+    } else if (arg === "--max-trade-fee-bps") {
+      args.maxTradeFeeBps = parseInteger(next(), arg);
     } else if (arg === "--max-cap-used-bps") {
       args.maxCapUsedBps = parseInteger(next(), arg);
     } else if (arg === "--max-normal-roll-cost-bps") {
@@ -470,6 +475,23 @@ function decodeMarketHealth(raw) {
   };
 }
 
+function emptyMarketHealth(market = null) {
+  return {
+    market,
+    token: ZERO_ADDRESS,
+    lpToken: ZERO_ADDRESS,
+    feeBps: 0,
+    ethReserve: 0n,
+    tokenReserve: 0n,
+    sampleEthIn: 0n,
+    sampleBuyTokenOut: 0n,
+    sampleTokenIn: 0n,
+    sampleSellEthOut: 0n,
+    hasLiquidity: false,
+    optional: true,
+  };
+}
+
 function decodeLpVaultHealth(raw) {
   const hasSalePolicy = hasWords(raw, 21);
   const hasMarketCounters = hasWords(raw, 23);
@@ -497,6 +519,14 @@ function decodeLpVaultHealth(raw) {
     sharePriceWad: decodeUint(raw, hasMarketCounters ? 20 : hasSalePolicy ? 19 : 18),
     openInventorySeriesCount: hasMarketCounters ? decodeUint(raw, 21) : hasSalePolicy ? decodeUint(raw, 20) : null,
     openInventoryMarketCount: hasMarketCounters ? decodeUint(raw, 22) : 0n,
+  };
+}
+
+function decodeVaultSellQuote(raw) {
+  return {
+    ethOut: decodeUint(raw, 0),
+    feeEth: decodeUint(raw, 1),
+    productAmount: decodeUint(raw, 2),
   };
 }
 
@@ -700,6 +730,92 @@ async function readMedianOracleHealth(rpcUrl, oracle, factory, series) {
   };
 }
 
+async function readOptionalMarketHealth(rpcUrl, lens, market, args) {
+  if (!isAddress(market)) return emptyMarketHealth(market);
+  const raw = await optionalEthCall(
+    rpcUrl,
+    lens,
+    encodeAddressUintUint(SELECTORS.healthMarket, market, args.sampleTradeEthWei, args.sampleTradeEthWei),
+  );
+  if (typeof raw !== "string" || !hasWords(raw, 11)) {
+    return { ...emptyMarketHealth(market), error: typeof raw === "string" ? "short market health response" : raw.error };
+  }
+  return decodeMarketHealth(raw);
+}
+
+async function readVaultProductQuote(rpcUrl, manifest, args, key, wrapperHealth) {
+  const wrapper = key === "boosted" ? manifest.contracts.boostedVault : manifest.contracts.steadyVault;
+  const product = key === "boosted" ? "Boosted ETH" : "Steady ETH";
+  const base = {
+    product,
+    wrapper,
+    share: wrapperHealth.share,
+    currentToken: wrapperHealth.currentToken,
+    sampleEthIn: args.sampleTradeEthWei,
+    sampleSharesIn: args.sampleTradeEthWei,
+    sampleBuySharesOut: 0n,
+    sampleSellEthOut: 0n,
+    sampleSellFeeEth: 0n,
+    sampleSellProductAmount: 0n,
+    buyQuoteReady: false,
+    sellQuoteReady: false,
+    wrapperBuyOpen: !wrapperHealth.rollActive && !wrapperHealth.depositsPaused,
+    wrapperSellOpen: !wrapperHealth.rollActive,
+    error: null,
+  };
+
+  const buyRaw = await optionalEthCall(
+    rpcUrl,
+    manifest.contracts.lpVault,
+    encodeAddressUint(SELECTORS.quoteBuyProduct, wrapper, args.sampleTradeEthWei),
+  );
+  if (typeof buyRaw === "string" && hasWords(buyRaw, 1)) {
+    base.sampleBuySharesOut = decodeUint(buyRaw);
+    base.buyQuoteReady = base.sampleBuySharesOut > 0n;
+  } else {
+    base.error = typeof buyRaw === "string" ? "short buy quote response" : buyRaw.error;
+  }
+
+  const sellRaw = await optionalEthCall(
+    rpcUrl,
+    manifest.contracts.lpVault,
+    encodeAddressUint(SELECTORS.quoteSellProduct, wrapper, args.sampleTradeEthWei),
+  );
+  if (typeof sellRaw === "string" && hasWords(sellRaw, 3)) {
+    const sell = decodeVaultSellQuote(sellRaw);
+    base.sampleSellEthOut = sell.ethOut;
+    base.sampleSellFeeEth = sell.feeEth;
+    base.sampleSellProductAmount = sell.productAmount;
+    base.sellQuoteReady = base.sampleSellEthOut > 0n;
+  } else if (!base.error) {
+    base.error = typeof sellRaw === "string" ? "short sell quote response" : sellRaw.error;
+  }
+
+  return base;
+}
+
+async function readVaultTraderHealth(rpcUrl, manifest, args, lpVault, wrappers) {
+  const feeRaw = await optionalEthCall(rpcUrl, manifest.contracts.lpVault, SELECTORS.productTradeFeeBps);
+  const productTradeFeeBps = typeof feeRaw === "string" && hasWords(feeRaw, 1) ? decodeUint(feeRaw) : null;
+  const headroom =
+    lpVault.maxActiveStrategyEth > lpVault.activeStrategyEth
+      ? lpVault.maxActiveStrategyEth - lpVault.activeStrategyEth
+      : 0n;
+  const sampleTradeCapacity = minBigInt(lpVault.managedAssets, lpVault.maxEthPerRoll, headroom);
+  const [steady, boosted] = await Promise.all([
+    readVaultProductQuote(rpcUrl, manifest, args, "steady", wrappers.steady),
+    readVaultProductQuote(rpcUrl, manifest, args, "boosted", wrappers.boosted),
+  ]);
+
+  return {
+    productTradeFeeBps,
+    feeReadable: productTradeFeeBps !== null,
+    sampleTradeCapacity,
+    steady,
+    boosted,
+  };
+}
+
 async function readHealth(rpcUrl, manifest, args) {
   const lens = manifest.contracts.healthLens;
   const lpVault = decodeLpVaultHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthLpVault, manifest.contracts.lpVault)));
@@ -723,22 +839,25 @@ async function readHealth(rpcUrl, manifest, args) {
     readSellerAuctionDiscovery(rpcUrl, manifest.contracts.rollAuction, manifest.contracts.boostedVault),
     readMedianOracleHealth(rpcUrl, seriesHealth.first.oracle, manifest.contracts.factory, seriesHealth),
   ]);
+  const wrappers = {
+    steady: decodeWrapperHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthWrapper, manifest.contracts.steadyVault))),
+    boosted: decodeWrapperHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthWrapper, manifest.contracts.boostedVault))),
+  };
+  const [steadyMarket, boostedMarket, traderVault] = await Promise.all([
+    readOptionalMarketHealth(rpcUrl, lens, manifest.contracts?.steadyMarket, args),
+    readOptionalMarketHealth(rpcUrl, lens, manifest.contracts?.boostedMarket, args),
+    readVaultTraderHealth(rpcUrl, manifest, args, lpVault, wrappers),
+  ]);
 
   return {
     markets: {
-      steady: decodeMarketHealth(
-        await ethCall(rpcUrl, lens, encodeAddressUintUint(SELECTORS.healthMarket, manifest.contracts.steadyMarket, args.sampleTradeEthWei, args.sampleTradeEthWei)),
-      ),
-      boosted: decodeMarketHealth(
-        await ethCall(rpcUrl, lens, encodeAddressUintUint(SELECTORS.healthMarket, manifest.contracts.boostedMarket, args.sampleTradeEthWei, args.sampleTradeEthWei)),
-      ),
+      steady: steadyMarket,
+      boosted: boostedMarket,
     },
+    traderVault,
     lpVault,
     lpInventory,
-    wrappers: {
-      steady: decodeWrapperHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthWrapper, manifest.contracts.steadyVault))),
-      boosted: decodeWrapperHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthWrapper, manifest.contracts.boostedVault))),
-    },
+    wrappers,
     series: seriesHealth,
     lpKeeper: await readLpKeeperHealth(rpcUrl, manifest.contracts.lpKeeper),
     auctionPolicy: decodeAuctionPolicyHealth(await ethCall(rpcUrl, lens, encodeAddress(SELECTORS.healthAuctionPolicy, manifest.contracts.rollAuction))),
@@ -807,41 +926,129 @@ function checkManifestAndChain(checks, manifest, rpcChainId, args) {
   );
 }
 
-function checkMarkets(checks, health, args) {
-  for (const [key, market] of Object.entries(health.markets)) {
+function checkTraderVault(checks, health, args) {
+  const trader = health.traderVault;
+  addCheck(
+    checks,
+    trader.feeReadable ? "pass" : "fail",
+    "trader",
+    "Protocol ETH Liquidity Vault trade fee is readable",
+    trader.feeReadable
+      ? `Vault-backed product trade fee is ${bpsText(trader.productTradeFeeBps)}.`
+      : "Could not read productTradeFeeBps() from the LP vault.",
+    { productTradeFeeBps: trader.productTradeFeeBps },
+  );
+  addCheck(
+    checks,
+    trader.feeReadable && trader.productTradeFeeBps <= BigInt(args.maxTradeFeeBps) ? "pass" : "warn",
+    "trader",
+    "Protocol ETH Liquidity Vault trade fee",
+    trader.feeReadable
+      ? `Fee is ${bpsText(trader.productTradeFeeBps)}; target max is ${args.maxTradeFeeBps} bps.`
+      : "Trade fee could not be checked.",
+    { productTradeFeeBps: trader.productTradeFeeBps, maxTradeFeeBps: args.maxTradeFeeBps },
+  );
+  addCheck(
+    checks,
+    trader.sampleTradeCapacity >= args.sampleTradeEthWei ? "pass" : "fail",
+    "trader",
+    "Protocol ETH Liquidity Vault has sample trade capacity",
+    `Sample trade size is ${weiToEthText(args.sampleTradeEthWei)}; vault direct-trade capacity is ${weiToEthText(trader.sampleTradeCapacity)}.`,
+    {
+      sampleTradeEth: args.sampleTradeEthWei,
+      sampleTradeCapacity: trader.sampleTradeCapacity,
+      managedAssets: health.lpVault.managedAssets,
+      maxEthPerRoll: health.lpVault.maxEthPerRoll,
+      maxActiveStrategyEth: health.lpVault.maxActiveStrategyEth,
+      activeStrategyEth: health.lpVault.activeStrategyEth,
+    },
+  );
+
+  for (const [key, quote] of Object.entries({ steady: trader.steady, boosted: trader.boosted })) {
     const label = key === "boosted" ? "Boosted ETH" : "Steady ETH";
     addCheck(
       checks,
-      market.hasLiquidity ? "pass" : "fail",
+      quote.wrapperBuyOpen && quote.wrapperSellOpen ? "pass" : "fail",
       "trader",
-      `${label} market has liquidity`,
+      `${label} wrapper is open for vault-backed trading`,
+      quote.wrapperBuyOpen && quote.wrapperSellOpen
+        ? `${label} wrapper is not rolling and deposits are open.`
+        : `${label} wrapper is rolling or deposits are paused, so direct vault-backed buys/sells are not fully live.`,
+      {
+        wrapper: quote.wrapper,
+        share: quote.share,
+        currentToken: quote.currentToken,
+        wrapperBuyOpen: quote.wrapperBuyOpen,
+        wrapperSellOpen: quote.wrapperSellOpen,
+      },
+    );
+    addCheck(
+      checks,
+      quote.buyQuoteReady && quote.sellQuoteReady ? "pass" : "fail",
+      "trader",
+      `${label} vault-backed buy/sell quotes`,
+      quote.buyQuoteReady && quote.sellQuoteReady
+        ? `Sample buy returns ${weiToEthText(quote.sampleBuySharesOut)} shares; sample sell returns ${weiToEthText(quote.sampleSellEthOut)}.`
+        : `Vault quote missing for ${label}${quote.error ? `: ${quote.error}` : "."}`,
+      {
+        wrapper: quote.wrapper,
+        sampleEthIn: quote.sampleEthIn,
+        sampleSharesIn: quote.sampleSharesIn,
+        sampleBuySharesOut: quote.sampleBuySharesOut,
+        sampleSellEthOut: quote.sampleSellEthOut,
+        sampleSellFeeEth: quote.sampleSellFeeEth,
+        sampleSellProductAmount: quote.sampleSellProductAmount,
+      },
+    );
+  }
+}
+
+function checkSecondaryMarkets(checks, health, args) {
+  for (const [key, market] of Object.entries(health.markets)) {
+    const label = key === "boosted" ? "Boosted ETH" : "Steady ETH";
+    if (!isAddress(market.market)) {
+      addCheck(
+        checks,
+        "pass",
+        "secondary-liquidity",
+        `${label} secondary AMM is optional`,
+        `${label} secondary AMM is not configured; vault-backed trading remains the required trader route.`,
+        { market: market.market },
+      );
+      continue;
+    }
+    addCheck(
+      checks,
+      market.hasLiquidity ? "pass" : "warn",
+      "secondary-liquidity",
+      `${label} secondary AMM has liquidity`,
       market.hasLiquidity
-        ? `${label} market has ${weiToEthText(market.ethReserve)} and ${weiToEthText(market.tokenReserve)} token reserve.`
-        : `${label} market has no usable liquidity.`,
+        ? `${label} secondary AMM has ${weiToEthText(market.ethReserve)} and ${weiToEthText(market.tokenReserve)} token reserve.`
+        : `${label} secondary AMM has no usable liquidity.`,
       { market: market.market, ethReserve: market.ethReserve, tokenReserve: market.tokenReserve },
     );
     addCheck(
       checks,
       market.ethReserve >= args.minMarketEthWei ? "pass" : "warn",
-      "trader",
-      `${label} market depth`,
-      `${label} market ETH reserve is ${weiToEthText(market.ethReserve)}; target is ${weiToEthText(args.minMarketEthWei)}.`,
+      "secondary-liquidity",
+      `${label} secondary AMM depth`,
+      `${label} secondary AMM ETH reserve is ${weiToEthText(market.ethReserve)}; optional target is ${weiToEthText(args.minMarketEthWei)}.`,
       { market: market.market, ethReserve: market.ethReserve, minMarketEth: args.minMarketEthWei },
     );
     addCheck(
       checks,
-      market.sampleBuyTokenOut > 0n && market.sampleSellEthOut > 0n ? "pass" : "fail",
-      "trader",
-      `${label} buy/sell quotes`,
-      `Sample buy returns ${weiToEthText(market.sampleBuyTokenOut)}; sample sell returns ${weiToEthText(market.sampleSellEthOut)}.`,
+      market.sampleBuyTokenOut > 0n && market.sampleSellEthOut > 0n ? "pass" : "warn",
+      "secondary-liquidity",
+      `${label} secondary AMM buy/sell quotes`,
+      `Sample AMM buy returns ${weiToEthText(market.sampleBuyTokenOut)}; sample AMM sell returns ${weiToEthText(market.sampleSellEthOut)}.`,
       { sampleEthIn: market.sampleEthIn, sampleBuyTokenOut: market.sampleBuyTokenOut, sampleSellEthOut: market.sampleSellEthOut },
     );
     addCheck(
       checks,
       market.feeBps <= args.maxMarketFeeBps ? "pass" : "warn",
-      "trader",
-      `${label} market fee`,
-      `Fee is ${bpsText(BigInt(market.feeBps))}; target max is ${args.maxMarketFeeBps} bps.`,
+      "secondary-liquidity",
+      `${label} secondary AMM fee`,
+      `Fee is ${bpsText(BigInt(market.feeBps))}; optional target max is ${args.maxMarketFeeBps} bps.`,
       { feeBps: market.feeBps, maxMarketFeeBps: args.maxMarketFeeBps },
     );
   }
@@ -1524,9 +1731,9 @@ function capacityLevel(ok, args) {
 }
 
 function checkCapacityPolicy(checks, health, args) {
-  const visibleBoostedMarketDemand = health.markets.boosted.ethReserve;
+  const visibleBoostedSecondaryDemand = health.markets.boosted.ethReserve;
   const externalDemand =
-    visibleBoostedMarketDemand + args.boostedDemandWei + args.solverFloatWei;
+    visibleBoostedSecondaryDemand + args.boostedDemandWei + args.solverFloatWei;
   const lpCap = (health.lpVault.managedAssets * 10_000n) / BigInt(args.capacityRlpRatioBps);
   const avgDemandCap = capacityFromExternalDemand(
     externalDemand,
@@ -1549,10 +1756,10 @@ function checkCapacityPolicy(checks, health, args) {
     "pass",
     "sustainability",
     "capacity policy inputs are explicit",
-    `${args.noSolverLaunch ? "No-solver launch mode: LP vault capital is the blocking capacity gate. " : ""}Visible Boosted market ETH is ${weiToEthText(visibleBoostedMarketDemand)}; additional Boosted demand is ${weiToEthText(args.boostedDemandWei)}; solver float is ${weiToEthText(args.solverFloatWei)}.`,
+    `${args.noSolverLaunch ? "No-solver launch mode: LP vault capital is the blocking capacity gate. " : ""}Visible secondary Boosted AMM ETH is ${weiToEthText(visibleBoostedSecondaryDemand)}; additional Boosted demand is ${weiToEthText(args.boostedDemandWei)}; solver float is ${weiToEthText(args.solverFloatWei)}.`,
     {
       noSolverLaunch: args.noSolverLaunch,
-      visibleBoostedMarketDemand,
+      visibleBoostedSecondaryDemand,
       committedBoostedDemand: args.boostedDemandWei,
       solverFloat: args.solverFloatWei,
       externalDemand,
@@ -1605,8 +1812,13 @@ function checkCapacityPolicy(checks, health, args) {
 }
 
 function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) {
-  const marketsReady = Object.values(health.markets).every(
-    (market) => market.hasLiquidity && market.sampleBuyTokenOut > 0n && market.sampleSellEthOut > 0n,
+  const traderVaultReady = (
+    health.traderVault.feeReadable &&
+    health.traderVault.productTradeFeeBps <= BigInt(args.maxTradeFeeBps) &&
+    health.traderVault.sampleTradeCapacity >= args.sampleTradeEthWei &&
+    [health.traderVault.steady, health.traderVault.boosted].every(
+      (quote) => quote.wrapperBuyOpen && quote.wrapperSellOpen && quote.buyQuoteReady && quote.sellQuoteReady,
+    )
   );
   const lpVaultAttached = sameAddress(health.lpKeeper?.vault, manifest.contracts.lpVault);
   const lpRollSellersPinned =
@@ -1680,7 +1892,7 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
   );
 
   const missing = [];
-  if (!marketsReady) missing.push("trader AMM liquidity/quotes");
+  if (!traderVaultReady) missing.push("Protocol ETH Liquidity Vault trader quotes/capacity");
   if (!lpReady) missing.push("LP vault keeper/account visibility");
   if (!wrappersReady) missing.push("wrapper keeper wiring");
   if (!oneTimeSetupClosed) missing.push("one-time deployment setup closure");
@@ -1694,10 +1906,10 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
     "decentralized",
     "protocol liveness surface is permissionless",
     missing.length === 0
-      ? "Trader AMMs, LP vault, wrapper keepers, public auctions, solver helper, and settlement oracles are all live through on-chain public entrypoints."
+      ? "Vault-backed trader quotes, LP vault, wrapper keepers, public auctions, solver helper, and settlement oracles are all live through on-chain public entrypoints."
       : `Missing or blocked: ${missing.join(", ")}.`,
     {
-      marketsReady,
+      traderVaultReady,
       lpReady,
       wrappersReady,
       oneTimeSetupClosed,
@@ -1741,7 +1953,8 @@ async function main() {
   if (missingManifestKeys(manifest).length === 0) {
     await checkCode(args.rpc, checks, manifest);
     const health = await readHealth(args.rpc, manifest, args);
-    checkMarkets(checks, health, args);
+    checkTraderVault(checks, health, args);
+    checkSecondaryMarkets(checks, health, args);
     checkLpVault(checks, manifest, health, args);
     checkWrappers(checks, manifest, health, args);
     checkAuctionAndSeries(checks, manifest, health, args);

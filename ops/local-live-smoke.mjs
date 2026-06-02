@@ -532,6 +532,24 @@ async function runLiveSmoke(args) {
     record(args.noSolverLaunch ? "Strict no-solver live readiness passed" : "Strict live readiness passed");
 
     if (args.negativeReadiness) {
+      const vaultOnlyTraderManifestPath = await writeTamperedManifest(
+        tempDir,
+        manifest,
+        "vault-only-trader",
+        (draft) => {
+          draft.contracts.steadyMarket = null;
+          draft.contracts.boostedMarket = null;
+        },
+      );
+      await run(process.execPath, strictReadinessArgs({
+        manifestPath: vaultOnlyTraderManifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+      }), { timeoutMs: 180_000 });
+      record("Readiness accepts vault-backed trader route without secondary AMMs", {
+        manifestPath: vaultOnlyTraderManifestPath,
+      });
+
       const unpinnedLpManifestPath = await writeTamperedManifest(
         tempDir,
         manifest,
