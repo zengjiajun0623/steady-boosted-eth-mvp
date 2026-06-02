@@ -58,6 +58,11 @@ roll loss path caused by series basis risk. The vault share price can go down
 after a roll, so LP returns must be presented as market-making PnL with risk,
 not as guaranteed yield.
 
+LP-vault fuzz coverage also checks that, after a Steady roll, arbitrary old and
+new settlement prices clean up to the exact ETH value implied by the factory's
+P/N payoff math. This ties strategy inventory accounting back to the core
+option-split invariant instead of only scripted scenarios.
+
 The wrapper keeper now blocks normal rolls across changed strike, TWAP window,
 or settlement oracle. This keeps the simplified MVP from presenting a
 basis-changing migration as a cheap maturity roll; any future dynamic-strike

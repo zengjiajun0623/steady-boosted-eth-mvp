@@ -310,6 +310,50 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(vault.convertToAssets(1 ether), 0.9375 ether);
     }
 
+    function testFuzzSteadyRollCleanupMatchesFactoryPayoffs(
+        uint256 rawOldSettlementPrice,
+        uint256 rawNewSettlementPrice,
+        uint256 rawRollPriceWad
+    ) public {
+        uint256 oldSettlementPrice = _boundedSettlementPrice(rawOldSettlementPrice);
+        uint256 newSettlementPrice = _boundedSettlementPrice(rawNewSettlementPrice);
+        uint256 rollPriceWad = 0.98e18 + (rawRollPriceWad % 0.07e18);
+        uint256 oldPAmount = 0.5 ether;
+        uint256 ethToMint = 0.6 ether;
+
+        _depositFromAlice(2 ether);
+        uint256 auctionId = _createOldPAuction(oldPAmount, rollPriceWad, rollPriceWad, 1 days);
+
+        vm.warp(block.timestamp + 12 hours);
+        uint256 quotedNewP = auction.quote(auctionId, oldPAmount);
+        uint256 newPPaid =
+            vault.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, oldPAmount, ethToMint, quotedNewP);
+        assertEq(newPPaid, quotedNewP);
+
+        uint256 leftoverNewP = ethToMint - newPPaid;
+        uint256 expectedManagedAssets = 2 ether - ethToMint
+            + (oldPAmount * factory.pPayoffWad(STRIKE, oldSettlementPrice)) / 1e18
+            + (leftoverNewP * factory.pPayoffWad(STRIKE, newSettlementPrice)) / 1e18
+            + (ethToMint * factory.nPayoffWad(STRIKE, newSettlementPrice)) / 1e18;
+
+        vm.warp(block.timestamp + NEW_MATURITY);
+        oracle.setSettlementPrice(oldSeriesId, oldSettlementPrice);
+        oracle.setSettlementPrice(newSeriesId, newSettlementPrice);
+        factory.settle(oldSeriesId);
+        factory.settle(newSeriesId);
+
+        vault.redeemP(factory, oldSeriesId, oldPAmount);
+        vault.redeemP(factory, newSeriesId, leftoverNewP);
+        vault.redeemN(factory, newSeriesId, ethToMint);
+        vault.closeStrategy();
+
+        assertEq(vault.managedAssets(), expectedManagedAssets);
+        assertEq(vault.openInventorySeriesCount(), 0);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(newP.balanceOf(address(vault)), 0);
+        assertEq(newN.balanceOf(address(vault)), 0);
+    }
+
     function testManagerCanMergeMatchedInventoryAfterMaturityBeforeSettlement() public {
         _depositFromAlice(2 ether);
         uint256 auctionId = _createOldPAuction(1 ether);
@@ -520,6 +564,10 @@ contract EthLPVaultTest is VaultTestBase {
 
     function _tokens(bytes32 seriesId) internal view returns (MintBurnToken pToken, MintBurnToken nToken) {
         (,,,,,, pToken, nToken,,,) = factory.series(seriesId);
+    }
+
+    function _boundedSettlementPrice(uint256 rawPrice) internal pure returns (uint256) {
+        return 1 + (rawPrice % 1_000_000e18);
     }
 
     function _seedMarket(MintBurnToken token, string memory lpName, string memory lpSymbol)
