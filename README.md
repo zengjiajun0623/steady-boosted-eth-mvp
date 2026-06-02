@@ -8,7 +8,7 @@ The product is built around a simple user choice:
 Hold Steady ETH if you want smoother ETH exposure.
 Hold Boosted ETH if you want more upside and can accept more downside.
 Deposit ETH into the LP vault if you want to provide protocol liquidity.
-Run a solver or keeper if you want to compete to clear public rolls.
+Run a solver or keeper bot if you want to compete to clear public rolls.
 ```
 
 The original research thread is here:
@@ -52,14 +52,18 @@ they improve execution for the product and can be measured from public events.
 The ETH LP vault is the launch liquidity engine. Solvers compete around it; they
 do not need to be exclusive market makers.
 
-### Operator
+### Keeper / Verifier
 
-An operator keeps the system honest.
+There is no normal protocol admin.
 
-Before capacity grows, they run readiness and capacity gates. If normal rolls
-cannot clear inside the low-cost band, the right product answer is to pause
-growth, shrink capacity, or require more backstop/solver liquidity. It should
-not quietly force users through expensive rotation.
+Anyone can run the public scripts that inspect readiness, start or finalize
+allowed rolls, bid as a solver, or clean up LP vault inventory. Those scripts do
+not grant special authority; the contracts decide what is valid.
+
+Before capacity grows, verifiers run readiness and capacity gates. If normal
+rolls cannot clear inside the low-cost band, the right product answer is to
+pause growth, shrink capacity, or require more backstop/solver liquidity. It
+should not quietly force users through expensive rotation.
 
 ## Try The Demo
 
@@ -118,6 +122,7 @@ Normal rolls target <= 10 bps by default.
 If cheap rolls fail, capacity pauses or shrinks instead of hiding high costs.
 Settlement uses a median of USDC, USDT, and DAI Uniswap TWAP sources.
 No trusted manual settlement, exclusive market maker, or centralized roll path is required.
+The normal launch path has no admin guardian.
 ```
 
 ## Team Handoff
@@ -159,14 +164,14 @@ EthereumMainnetOracleConfig for guarded Ethereum mainnet pool configuration
 MockSettlementOracle for local deterministic tests
 ```
 
-Operator and verification scripts:
+Verification, keeper, and solver scripts:
 
 ```text
 ops/mvp-acceptance.mjs             full local/live acceptance gate
 ops/readiness-check.mjs            live manifest readiness gate
 ops/local-live-smoke.mjs           fresh Anvil trader/LP/solver/keeper proof
-ops/keeper-decisions.mjs           public-state operator suggestions
-ops/keeper-runner.mjs              optional role-scoped execution runner
+ops/keeper-decisions.mjs           public-state keeper/solver suggestions
+ops/keeper-runner.mjs              optional role-scoped transaction runner
 ops/solver-improvement-report.mjs  public solver-vault fill attribution
 ops/vault-strategy-plan.mjs        deterministic LP vault action planner
 ops/capacity-policy.py             ETH-denominated launch cap gate
@@ -235,9 +240,9 @@ The planner returns one of the product actions: clear with solvers, wait for
 solvers then vault-backstop, vault-only bootstrap, pause rolls, shrink capacity,
 or require more solver/Boosted liquidity.
 
-## Operator Roles
+## Permissionless Runners
 
-Independent operators can inspect public roll state:
+Anyone can inspect public roll state:
 
 ```bash
 node ops/keeper-decisions.mjs \
@@ -245,7 +250,8 @@ node ops/keeper-decisions.mjs \
   --rpc <RPC_URL>
 ```
 
-Role-scoped runners can then act after reviewing the dry-run output:
+Role-scoped bots can then act after reviewing the dry-run output. These are not
+admin roles; they are ordinary transactions constrained by contract policy.
 
 ```bash
 # Solver role: compete for roll auctions.

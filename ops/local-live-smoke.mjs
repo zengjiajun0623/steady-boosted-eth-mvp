@@ -341,6 +341,53 @@ async function deployGuardedRollAuction(rpcUrl, privateKey, guardian) {
   return parseDeployedAddress(output);
 }
 
+async function deployPremiumLpBackstop(rpcUrl, privateKey, steadyRollSeller, boostedRollSeller) {
+  const keeperOutput = await run("forge", [
+    "create",
+    "--rpc-url",
+    rpcUrl,
+    "--private-key",
+    privateKey,
+    "--broadcast",
+    "src/vault/EthLPVaultKeeper.sol:EthLPVaultKeeper",
+    "--constructor-args",
+    String(wei("0.01")),
+    "0",
+  ], { timeoutMs: 300_000 });
+  const lpKeeper = parseDeployedAddress(keeperOutput);
+
+  const vaultOutput = await run("forge", [
+    "create",
+    "--rpc-url",
+    rpcUrl,
+    "--private-key",
+    privateKey,
+    "--broadcast",
+    "src/vault/EthLPVault.sol:EthLPVault",
+    "--constructor-args",
+    lpKeeper,
+    String(4 * 24 * 60 * 60),
+    String(wei("1")),
+    String(wei("3")),
+    "1001000000000000000",
+    "999000000000000000",
+    String(12 * 60 * 60),
+    String(4 * 60 * 60),
+    String(6 * 60 * 60),
+    "10",
+  ], { timeoutMs: 300_000 });
+  const lpVault = parseDeployedAddress(vaultOutput);
+
+  await castSend(rpcUrl, privateKey, lpKeeper, "setVault(address)", [lpVault]);
+  await castSend(rpcUrl, privateKey, lpKeeper, "setRollSellers(address,address)", [
+    steadyRollSeller,
+    boostedRollSeller,
+  ]);
+  await castSend(rpcUrl, privateKey, lpVault, "deposit()", [], { value: wei("1000") });
+
+  return { lpKeeper, lpVault };
+}
+
 async function exerciseMarket({ rpcUrl, privateKey, account, market, buyWei, sellFractionBps }) {
   const token = parseAddress(await castCall(rpcUrl, market, "token()(address)"));
   const before = await readTokenBalance(rpcUrl, token, account);
@@ -472,6 +519,34 @@ async function runLiveSmoke(args) {
       record("Readiness rejects nonzero auction guardian by default", {
         guardedAuction,
         manifestPath: guardedAuctionManifestPath,
+      });
+
+      const premiumBackstop = await deployPremiumLpBackstop(
+        rpcUrl,
+        args.deployerPrivateKey,
+        contracts.steadyVault,
+        contracts.boostedVault,
+      );
+      const premiumBackstopManifestPath = await writeTamperedManifest(
+        tempDir,
+        manifest,
+        "premium-lp-backstop",
+        (draft) => {
+          draft.contracts.lpKeeper = premiumBackstop.lpKeeper;
+          draft.contracts.lpVault = premiumBackstop.lpVault;
+        },
+      );
+      await expectReadinessFailure({
+        name: "Premium LP backstop manifest",
+        manifestPath: premiumBackstopManifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+        expectedText: "LP backstop does not pay a normal-roll premium",
+      });
+      record("Readiness rejects LP backstop premium above par", {
+        lpKeeper: premiumBackstop.lpKeeper,
+        lpVault: premiumBackstop.lpVault,
+        manifestPath: premiumBackstopManifestPath,
       });
     }
 
