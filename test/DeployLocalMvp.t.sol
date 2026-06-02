@@ -323,9 +323,7 @@ contract DeployLocalMvpTest {
         uint256 inventoryQuote = loopSecondNMarket.quoteSellToken(0.2 ether);
         vm.prank(KEEPER_CALLER);
         vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
-        loopLpKeeper.sellInventory(
-            loopFactory, loopSecondSeriesId, true, loopSecondNMarket, 0.2 ether, inventoryQuote
-        );
+        loopLpKeeper.sellInventory(loopFactory, loopSecondSeriesId, true, loopSecondNMarket, 0.2 ether, inventoryQuote);
         require(loopLpVault.strategyActive(), "strategy should remain active after blocked inventory sale");
     }
 

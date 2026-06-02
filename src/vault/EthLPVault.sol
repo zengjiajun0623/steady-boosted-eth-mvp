@@ -652,12 +652,11 @@ contract EthLPVault {
         (,,,,,, pToken, nToken,,,) = factory.series(seriesId);
     }
 
-    function _matchingInventoryToken(
-        EthOptionsFactory factory,
-        bytes32 seriesId,
-        bool useN,
-        EthTokenAMM market
-    ) internal view returns (MintBurnToken token) {
+    function _matchingInventoryToken(EthOptionsFactory factory, bytes32 seriesId, bool useN, EthTokenAMM market)
+        internal
+        view
+        returns (MintBurnToken token)
+    {
         (MintBurnToken pToken, MintBurnToken nToken) = _tokens(factory, seriesId);
         token = useN ? nToken : pToken;
         if (address(market) == address(0) || address(market.token()) != address(token)) revert MarketTokenMismatch();

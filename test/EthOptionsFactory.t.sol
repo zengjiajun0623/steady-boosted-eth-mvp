@@ -120,8 +120,9 @@ contract EthOptionsFactoryTest is TestBase {
         reentrantOracle.configure(true, false);
         payable(address(reentrantOracle)).transfer(1 wei);
 
-        bytes32 reentrantSeriesId =
-            factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY + 1 days), TWAP_WINDOW, CAP, reentrantOracle);
+        bytes32 reentrantSeriesId = factory.createSeries(
+            STRIKE, uint64(block.timestamp + MATURITY + 1 days), TWAP_WINDOW, CAP, reentrantOracle
+        );
 
         (,,,, uint256 openInterestEth, uint256 collateralEth, MintBurnToken pToken, MintBurnToken nToken,,,) =
             factory.series(reentrantSeriesId);

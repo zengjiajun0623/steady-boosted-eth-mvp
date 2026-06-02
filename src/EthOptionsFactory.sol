@@ -85,7 +85,8 @@ contract EthOptionsFactory {
         );
         if (address(series[seriesId].oracle) != address(0)) revert SeriesExists();
 
-        try ISeriesSettlementOracle(address(oracle)).registerSeries(seriesId, maturity, twapWindow) {} catch {
+        try ISeriesSettlementOracle(address(oracle)).registerSeries(seriesId, maturity, twapWindow) {}
+        catch {
             revert OracleRegistrationFailed();
         }
 

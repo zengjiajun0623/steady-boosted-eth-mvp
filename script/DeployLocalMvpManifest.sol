@@ -100,28 +100,10 @@ contract DeployLocalMvpManifest {
 
     function _deployProducts() internal {
         steadyKeeper = new SeriesExposureVaultKeeper(
-            factory,
-            rollAuction,
-            false,
-            1e18,
-            MIN_NORMAL_ROLL_PRICE_WAD,
-            12 hours,
-            3 days,
-            0.01 ether,
-            5 ether,
-            0
+            factory, rollAuction, false, 1e18, MIN_NORMAL_ROLL_PRICE_WAD, 12 hours, 3 days, 0.01 ether, 5 ether, 0
         );
         boostedKeeper = new SeriesExposureVaultKeeper(
-            factory,
-            rollAuction,
-            true,
-            1e18,
-            MIN_NORMAL_ROLL_PRICE_WAD,
-            12 hours,
-            3 days,
-            0.01 ether,
-            5 ether,
-            0
+            factory, rollAuction, true, 1e18, MIN_NORMAL_ROLL_PRICE_WAD, 12 hours, 3 days, 0.01 ether, 5 ether, 0
         );
 
         steadyVault = new SeriesExposureVault(firstP, address(steadyKeeper), "Steady ETH", "steadyETH", 5 ether);

@@ -176,14 +176,8 @@ contract ProtocolHealthLensTest {
         DeployLocalMvp deployer = _seededLocalDeployment();
         ProtocolHealthLens lens = deployer.healthLens();
 
-        (
-            EthOptionsFactory factory,
-            ,
-            RollAuction rollAuction,
-            ,
-            EthLPVaultKeeper lpKeeper,
-            EthLPVault lpVault
-        ) = deployer.core();
+        (EthOptionsFactory factory,, RollAuction rollAuction,, EthLPVaultKeeper lpKeeper, EthLPVault lpVault) =
+            deployer.core();
         (bytes32 firstSeriesId, bytes32 secondSeriesId,,,,) = deployer.series();
         (SeriesExposureVaultKeeper steadyKeeper,) = deployer.wrapperKeepers();
 
@@ -239,13 +233,7 @@ contract ProtocolHealthLensTest {
         (,,,,, EthLPVault lpVault) = deployer.core();
 
         {
-            (
-                EthOptionsFactory factory,
-                ,
-                RollAuction rollAuction,
-                ,
-                EthLPVaultKeeper lpKeeper,
-            ) = deployer.core();
+            (EthOptionsFactory factory,, RollAuction rollAuction,, EthLPVaultKeeper lpKeeper,) = deployer.core();
             (bytes32 firstSeriesId, bytes32 secondSeriesId,,,,) = deployer.series();
             (,,, EthTokenAMM secondNMarket) = deployer.inventoryMarkets();
             (SeriesExposureVaultKeeper steadyKeeper,) = deployer.wrapperKeepers();

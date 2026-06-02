@@ -168,13 +168,9 @@ contract DeployLocalMvp {
         stored.factory = new EthOptionsFactory();
         stored.oracle = new MockSettlementOracle();
         stored.healthLens = new ProtocolHealthLens();
-        stored.rollAuction =
-            new RollAuction(
-                address(0),
-                config.minWrapperRollAmount,
-                config.maxActiveRollAuctions,
-                config.maxActiveRollAuctionsPerSeller
-            );
+        stored.rollAuction = new RollAuction(
+            address(0), config.minWrapperRollAmount, config.maxActiveRollAuctions, config.maxActiveRollAuctionsPerSeller
+        );
         stored.rollSolver = new RollSolver();
         stored.lpKeeper = new EthLPVaultKeeper(config.minRewardedOperationAmount, config.keeperRewardEth);
         stored.lpVault = new EthLPVault(

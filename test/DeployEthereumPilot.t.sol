@@ -317,13 +317,8 @@ contract DeployEthereumPilotTest {
         EthereumMainnetOracleConfig.MedianOracleConfig memory oracleConfig,
         uint256 index
     ) internal view {
-        (
-            ,
-            uint256 priceAtTickZeroWad,
-            bool invertPrice,
-            int24 minUsableTick,
-            int24 maxUsableTick
-        ) = oracle.poolConfigs(index);
+        (, uint256 priceAtTickZeroWad, bool invertPrice, int24 minUsableTick, int24 maxUsableTick) =
+            oracle.poolConfigs(index);
 
         assertEq(priceAtTickZeroWad, oracleConfig.pools[index].priceAtTickZeroWad);
         assertEq(invertPrice ? uint256(1) : uint256(0), oracleConfig.pools[index].invertPrice ? uint256(1) : uint256(0));

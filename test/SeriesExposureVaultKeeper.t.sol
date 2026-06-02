@@ -60,8 +60,7 @@ contract SeriesExposureVaultKeeperTest {
         boostedKeeper = new SeriesExposureVaultKeeper(
             factory, auction, true, 1.04e18, 0.97e18, 12 hours, 3 days, MIN_ROLL_AMOUNT, MAX_ROLL_AMOUNT, KEEPER_REWARD
         );
-        steadyVault =
-            new SeriesExposureVault(oldP, address(steadyKeeper), "Steady ETH", "steadyETH", MAX_ROLL_AMOUNT);
+        steadyVault = new SeriesExposureVault(oldP, address(steadyKeeper), "Steady ETH", "steadyETH", MAX_ROLL_AMOUNT);
         boostedVault =
             new SeriesExposureVault(oldN, address(boostedKeeper), "Boosted ETH", "boostedETH", MAX_ROLL_AMOUNT);
         steadyKeeper.setVault(steadyVault, oldSeriesId);
@@ -222,8 +221,7 @@ contract SeriesExposureVaultKeeperTest {
         vm.expectRevert(SeriesExposureVaultKeeper.InvalidSeries.selector);
         steadyKeeper.startRoll(differentStrike, 1 ether, 1.01e18, 0.99e18, 1 days);
 
-        bytes32 differentTwap =
-            factory.createSeries(STRIKE, uint64(block.timestamp + 90 days), 48 hours, CAP, oracle);
+        bytes32 differentTwap = factory.createSeries(STRIKE, uint64(block.timestamp + 90 days), 48 hours, CAP, oracle);
         vm.prank(caller);
         vm.expectRevert(SeriesExposureVaultKeeper.InvalidSeries.selector);
         steadyKeeper.startRoll(differentTwap, 1 ether, 1.01e18, 0.99e18, 1 days);

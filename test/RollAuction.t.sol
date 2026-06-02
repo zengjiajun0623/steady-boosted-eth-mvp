@@ -254,13 +254,7 @@ contract RollAuctionTest {
 
         vm.prank(seller);
         uint256 auctionId = trustlessAuction.createAuction(
-            IERC20Like(address(oldP)),
-            IERC20Like(address(newP)),
-            1 ether,
-            START_PRICE,
-            END_PRICE,
-            1 days,
-            seller
+            IERC20Like(address(oldP)), IERC20Like(address(newP)), 1 ether, START_PRICE, END_PRICE, 1 days, seller
         );
 
         vm.warp(block.timestamp + 12 hours);

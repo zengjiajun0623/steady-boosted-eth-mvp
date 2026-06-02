@@ -52,7 +52,15 @@ library EthereumMainnetOracleConfig {
     function mainnetStablePools005()
         internal
         pure
-        returns (address usdcPool, address usdtPool, address daiPool, address usdc, address usdt, address dai, address weth)
+        returns (
+            address usdcPool,
+            address usdtPool,
+            address daiPool,
+            address usdc,
+            address usdt,
+            address dai,
+            address weth
+        )
     {
         usdcPool = 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640;
         usdtPool = 0x11b815efB8f581194ae79006d24E0d814B7697F6;

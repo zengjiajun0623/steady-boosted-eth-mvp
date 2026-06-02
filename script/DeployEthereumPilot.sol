@@ -83,11 +83,7 @@ contract DeployEthereumPilot {
         address lpVault
     );
     event PilotOracleConfig(
-        address indexed usdcPool,
-        address indexed usdtPool,
-        address indexed daiPool,
-        uint32 twapWindow,
-        uint256 capEth
+        address indexed usdcPool, address indexed usdtPool, address indexed daiPool, uint32 twapWindow, uint256 capEth
     );
     event PilotSeriesDeployed(
         bytes32 indexed firstSeriesId,
@@ -142,16 +138,15 @@ contract DeployEthereumPilot {
                 || config.maxEthPerRoll == 0 || config.maxActiveStrategyEth < config.maxEthPerRoll
                 || config.maxRollPriceWad == 0 || config.maxRollPriceWad > WAD || config.steadyFloorPriceWad == 0
                 || config.minInventorySalePriceWad < MIN_NORMAL_ROLL_PRICE_WAD
-                || config.minInventorySalePriceWad > config.maxRollPriceWad
-                || config.boostedFloorPriceWad == 0 || config.steadyFloorPriceWad < MIN_NORMAL_ROLL_PRICE_WAD
+                || config.minInventorySalePriceWad > config.maxRollPriceWad || config.boostedFloorPriceWad == 0
+                || config.steadyFloorPriceWad < MIN_NORMAL_ROLL_PRICE_WAD
                 || config.boostedFloorPriceWad < MIN_NORMAL_ROLL_PRICE_WAD
                 || config.steadyFloorPriceWad > config.maxRollPriceWad
                 || config.boostedFloorPriceWad > config.maxRollPriceWad || config.minAuctionDuration == 0
                 || config.minLpBackstopDelay + config.minLpAuctionTimeLeft > config.minAuctionDuration
                 || config.maxLpAuctionPriceDropBps > MAX_NORMAL_ROLL_COST_BPS
-                || config.maxAuctionDuration < config.minAuctionDuration
-                || config.minWrapperRollAmount == 0 || config.minRewardedOperationAmount == 0
-                || config.maxWrapperRollAmount < config.minWrapperRollAmount
+                || config.maxAuctionDuration < config.minAuctionDuration || config.minWrapperRollAmount == 0
+                || config.minRewardedOperationAmount == 0 || config.maxWrapperRollAmount < config.minWrapperRollAmount
                 || config.maxWrapperRollAmount > config.capEth || config.maxActiveRollAuctions == 0
                 || config.maxActiveRollAuctionsPerSeller == 0
         ) {
@@ -165,13 +160,9 @@ contract DeployEthereumPilot {
         stored.factory = new EthOptionsFactory();
         stored.oracle = EthereumMainnetOracleConfig.deployMainnetEthStableMedian005(address(stored.factory));
         stored.healthLens = new ProtocolHealthLens();
-        stored.rollAuction =
-            new RollAuction(
-                address(0),
-                config.minWrapperRollAmount,
-                config.maxActiveRollAuctions,
-                config.maxActiveRollAuctionsPerSeller
-            );
+        stored.rollAuction = new RollAuction(
+            address(0), config.minWrapperRollAmount, config.maxActiveRollAuctions, config.maxActiveRollAuctionsPerSeller
+        );
         stored.rollSolver = new RollSolver();
         stored.lpKeeper = new EthLPVaultKeeper(config.minRewardedOperationAmount, config.keeperRewardEth);
         stored.lpVault = new EthLPVault(

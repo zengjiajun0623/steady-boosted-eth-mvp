@@ -253,19 +253,8 @@ contract ProtocolHealthLens {
         returns (LpInventoryHealth memory health)
     {
         (EthOptionsFactory factory, bytes32 seriesId) = vault.inventorySeries(index);
-        (
-            ,
-            uint64 maturity,
-            ,
-            ,
-            ,
-            ,
-            MintBurnToken pToken,
-            MintBurnToken nToken,
-            ,
-            bool settled,
-            uint256 settlementPrice
-        ) = factory.series(seriesId);
+        (, uint64 maturity,,,,, MintBurnToken pToken, MintBurnToken nToken,, bool settled, uint256 settlementPrice) =
+            factory.series(seriesId);
 
         uint256 pBalance = pToken.balanceOf(address(vault));
         uint256 nBalance = nToken.balanceOf(address(vault));
@@ -317,11 +306,7 @@ contract ProtocolHealthLens {
         });
     }
 
-    function lpAccountHealth(EthLPVault vault, address account)
-        external
-        view
-        returns (LpAccountHealth memory health)
-    {
+    function lpAccountHealth(EthLPVault vault, address account) external view returns (LpAccountHealth memory health) {
         MintBurnToken share = vault.share();
         uint256 shareBalance = share.balanceOf(account);
         (uint256 pendingWithdrawAssets, uint64 pendingUnlockAt) = vault.withdrawalRequests(account);

@@ -253,9 +253,7 @@ contract EthLPVaultTest is VaultTestBase {
         uint256 auctionId = _createOldPAuction(1 ether);
 
         vm.warp(block.timestamp + 12 hours);
-        riskVault.fillSteadyRoll(
-            factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether
-        );
+        riskVault.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether);
 
         EthTokenAMM market = _seedMarket(newN, "newN direct market", "newN-LP");
 
@@ -302,8 +300,7 @@ contract EthLPVaultTest is VaultTestBase {
 
     function testUserCanBuyBoostedFromLpVaultWithEth() public {
         _depositFromAlice(2 ether);
-        SeriesExposureVault boosted =
-            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
 
         vm.prank(alice);
         uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0.498 ether, alice);
@@ -318,8 +315,7 @@ contract EthLPVaultTest is VaultTestBase {
 
     function testUserCanSellBoostedBackToLpVaultForEth() public {
         _depositFromAlice(2 ether);
-        SeriesExposureVault boosted =
-            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
 
         vm.prank(alice);
         uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0, alice);
@@ -343,8 +339,7 @@ contract EthLPVaultTest is VaultTestBase {
     function testVaultBackedProductQuotesMatchExecution() public {
         _depositFromAlice(2 ether);
         SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
-        SeriesExposureVault boosted =
-            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
 
         uint256 steadyBuyQuote = vault.quoteBuyProduct(steady, 0.5 ether);
         uint256 boostedBuyQuote = vault.quoteBuyProduct(boosted, 0.25 ether);
@@ -443,8 +438,7 @@ contract EthLPVaultTest is VaultTestBase {
 
     function testVaultCanMergeAndCloseInventoryAfterBoostedProductRoundTrip() public {
         _depositFromAlice(2 ether);
-        SeriesExposureVault boosted =
-            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
 
         vm.prank(alice);
         uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0, alice);
@@ -633,8 +627,9 @@ contract EthLPVaultTest is VaultTestBase {
 
         vm.warp(block.timestamp + 12 hours);
         uint256 quotedNewP = auction.quote(auctionId, oldPAmount);
-        uint256 newPPaid =
-            vault.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, oldPAmount, ethToMint, quotedNewP);
+        uint256 newPPaid = vault.fillSteadyRoll(
+            factory, auction, oldSeriesId, newSeriesId, auctionId, oldPAmount, ethToMint, quotedNewP
+        );
         assertEq(newPPaid, quotedNewP);
 
         uint256 leftoverNewP = ethToMint - newPPaid;
@@ -677,8 +672,9 @@ contract EthLPVaultTest is VaultTestBase {
 
         vm.warp(block.timestamp + 12 hours);
         uint256 quotedNewN = auction.quote(auctionId, oldNAmount);
-        uint256 newNPaid =
-            vault.fillBoostedRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, oldNAmount, ethToMint, quotedNewN);
+        uint256 newNPaid = vault.fillBoostedRoll(
+            factory, auction, oldSeriesId, newSeriesId, auctionId, oldNAmount, ethToMint, quotedNewN
+        );
         assertEq(newNPaid, quotedNewN);
 
         uint256 leftoverNewN = ethToMint - newNPaid;
@@ -867,8 +863,7 @@ contract EthLPVaultTest is VaultTestBase {
         uint256 startPrice,
         uint256 endPrice,
         uint64 duration
-    ) internal returns (uint256 auctionId)
-    {
+    ) internal returns (uint256 auctionId) {
         vm.prank(steadyVault);
         factory.mint{value: oldPAmount}(oldSeriesId);
 

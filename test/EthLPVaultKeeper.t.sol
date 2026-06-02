@@ -139,20 +139,19 @@ contract EthLPVaultKeeperTest {
 
     function testKeeperRejectsRollBeforeAllowedSellersAreSet() public {
         EthLPVaultKeeper freshKeeper = new EthLPVaultKeeper(MIN_REWARDED_AMOUNT, 0);
-        EthLPVault freshVault =
-            new EthLPVault(
-                address(freshKeeper),
-                4 days,
-                1 ether,
-                1.2 ether,
-                1.05e18,
-                MIN_INVENTORY_SALE_PRICE,
-                12 hours,
-                4 hours,
-                6 hours,
-                200,
-                PRODUCT_TRADE_FEE_BPS
-            );
+        EthLPVault freshVault = new EthLPVault(
+            address(freshKeeper),
+            4 days,
+            1 ether,
+            1.2 ether,
+            1.05e18,
+            MIN_INVENTORY_SALE_PRICE,
+            12 hours,
+            4 hours,
+            6 hours,
+            200,
+            PRODUCT_TRADE_FEE_BPS
+        );
         freshKeeper.setVault(freshVault);
         vm.prank(alice);
         freshVault.deposit{value: 2 ether}();
@@ -307,20 +306,19 @@ contract EthLPVaultKeeperTest {
 
     function testOnlyDeployerCanAttachVaultOnce() public {
         EthLPVaultKeeper freshKeeper = new EthLPVaultKeeper(MIN_REWARDED_AMOUNT, 0);
-        EthLPVault freshVault =
-            new EthLPVault(
-                address(freshKeeper),
-                4 days,
-                1 ether,
-                1.2 ether,
-                1.05e18,
-                MIN_INVENTORY_SALE_PRICE,
-                12 hours,
-                4 hours,
-                6 hours,
-                200,
-                PRODUCT_TRADE_FEE_BPS
-            );
+        EthLPVault freshVault = new EthLPVault(
+            address(freshKeeper),
+            4 days,
+            1 ether,
+            1.2 ether,
+            1.05e18,
+            MIN_INVENTORY_SALE_PRICE,
+            12 hours,
+            4 hours,
+            6 hours,
+            200,
+            PRODUCT_TRADE_FEE_BPS
+        );
 
         vm.prank(caller);
         vm.expectRevert(EthLPVaultKeeper.NotDeployer.selector);
@@ -396,13 +394,7 @@ contract EthLPVaultKeeperTest {
 
         vm.prank(outsider);
         auctionId = auction.createAuction(
-            IERC20Like(address(oldP)),
-            IERC20Like(address(newP)),
-            oldPAmount,
-            1.02e18,
-            0.98e18,
-            1 days,
-            outsider
+            IERC20Like(address(oldP)), IERC20Like(address(newP)), oldPAmount, 1.02e18, 0.98e18, 1 days, outsider
         );
     }
 

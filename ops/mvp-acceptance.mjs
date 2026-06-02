@@ -215,8 +215,15 @@ function expectedFailureSummary(stdout, stderr) {
 function buildSteps(args) {
   const steps = [];
   if (args.skipForge) {
+    steps.push(skipStep("contracts", "Solidity format check", "Skipped by --skip-forge."));
     steps.push(skipStep("contracts", "Foundry product suite", "Skipped by --skip-forge."));
   } else {
+    steps.push({
+      area: "contracts",
+      name: "Solidity format check",
+      command: "forge",
+      args: ["fmt", "--check"],
+    });
     steps.push({
       area: "contracts",
       name: "Foundry product suite",

@@ -40,8 +40,7 @@ contract MockMedianUniswapV3PoolOracle {
 }
 
 contract MedianStableTwapSettlementOracleTest {
-    MedianOracleVm internal constant vm =
-        MedianOracleVm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    MedianOracleVm internal constant vm = MedianOracleVm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     EthOptionsFactory internal factory;
     MockMedianUniswapV3PoolOracle internal usdcPool;
@@ -94,8 +93,7 @@ contract MedianStableTwapSettlementOracleTest {
         configs[0] = _poolConfig(usdcPool, 2_000e18, false, -100, 100);
         configs[1] = _poolConfig(usdtPool, 2_050e18, false, -100, 100);
         configs[2] = _poolConfig(daiPool, 600e18, false, -100, 100);
-        MedianStableTwapSettlementOracle outlierOracle =
-            new MedianStableTwapSettlementOracle(address(factory), configs);
+        MedianStableTwapSettlementOracle outlierOracle = new MedianStableTwapSettlementOracle(address(factory), configs);
         bytes32 outlierSeriesId =
             factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY_DELAY), TWAP_WINDOW, CAP, outlierOracle);
 
@@ -112,8 +110,7 @@ contract MedianStableTwapSettlementOracleTest {
         configs[0] = _poolConfig(usdcPool, 2_000e18, false, -100, 100);
         configs[1] = _poolConfig(usdtPool, 2_050e18, false, -100, 100);
         configs[2] = _poolConfig(daiPool, 9_000e18, false, -100, 100);
-        MedianStableTwapSettlementOracle outlierOracle =
-            new MedianStableTwapSettlementOracle(address(factory), configs);
+        MedianStableTwapSettlementOracle outlierOracle = new MedianStableTwapSettlementOracle(address(factory), configs);
         bytes32 outlierSeriesId =
             factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY_DELAY), TWAP_WINDOW, CAP, outlierOracle);
 
@@ -134,8 +131,7 @@ contract MedianStableTwapSettlementOracleTest {
         configs[0] = _poolConfig(usdcPool, priceA, false, -100, 100);
         configs[1] = _poolConfig(usdtPool, priceB, false, -100, 100);
         configs[2] = _poolConfig(daiPool, priceC, false, -100, 100);
-        MedianStableTwapSettlementOracle fuzzOracle =
-            new MedianStableTwapSettlementOracle(address(factory), configs);
+        MedianStableTwapSettlementOracle fuzzOracle = new MedianStableTwapSettlementOracle(address(factory), configs);
         bytes32 fuzzSeriesId =
             factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY_DELAY), TWAP_WINDOW, CAP, fuzzOracle);
 
