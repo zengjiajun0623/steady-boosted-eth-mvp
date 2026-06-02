@@ -49,6 +49,9 @@ contract MedianStableTwapSettlementOracle is ISeriesSettlementOracle {
             ) {
                 revert InvalidConfig();
             }
+            for (uint256 j = 0; j < i; j += 1) {
+                if (address(config.pool) == address(poolConfigs[j].pool)) revert InvalidConfig();
+            }
             poolConfigs[i] = config;
         }
     }

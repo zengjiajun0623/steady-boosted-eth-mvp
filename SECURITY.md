@@ -68,8 +68,9 @@ does not trap existing holders because redemptions remain available; it stops
 capacity growth until a later retry roll clears and finalizes.
 
 Settlement coverage includes 3-stable median TWAP tests that reject missing or
-out-of-band sources, ignore one low or high issuer outlier, and fuzz that
-settlement equals the median of the three source prices.
+out-of-band sources, reject duplicate median source pools, ignore one low or
+high issuer outlier, and fuzz that settlement equals the median of the three
+source prices.
 
 ## Non-Negotiable Safety Rules
 

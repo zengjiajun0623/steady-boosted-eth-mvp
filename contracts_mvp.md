@@ -511,8 +511,9 @@ The Uniswap-style adapters store each series maturity/window when the factory
 creates the series. At settlement they read the TWAP window ending at maturity,
 not the caller's current timestamp. That keeps delayed settlement calls from
 changing the price window. The median adapter requires all three stable pools to
-be readable and returns the middle ETH/stable price, so one depegged stable
-source cannot set settlement by itself.
+be distinct and readable, then returns the middle ETH/stable price. That means
+one depegged stable source cannot set settlement by itself, and a deployment
+cannot fake a three-source median by repeating one pool.
 
 Deployment must configure:
 

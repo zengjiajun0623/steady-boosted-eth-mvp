@@ -79,6 +79,7 @@ Implementation requirements:
 
 ```text
 use a deep allowlisted Uniswap v3 pool
+for the 3-stable median variant, require three distinct pools
 use a long window, likely 72h
 verify the pool has enough observation history
 finalize while the relevant observations are still available

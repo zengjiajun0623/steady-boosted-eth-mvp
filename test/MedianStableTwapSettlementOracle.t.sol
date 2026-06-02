@@ -155,6 +155,16 @@ contract MedianStableTwapSettlementOracleTest {
         factory.settle(seriesId);
     }
 
+    function testRejectsDuplicateSourcePools() public {
+        MedianStableTwapSettlementOracle.PoolConfig[3] memory configs;
+        configs[0] = _poolConfig(usdcPool, 2_000e18, false, -100, 100);
+        configs[1] = _poolConfig(usdcPool, 2_050e18, false, -100, 100);
+        configs[2] = _poolConfig(daiPool, 1_900e18, false, -100, 100);
+
+        vm.expectRevert(MedianStableTwapSettlementOracle.InvalidConfig.selector);
+        new MedianStableTwapSettlementOracle(address(factory), configs);
+    }
+
     function testRejectsSourceTickOutsideConfiguredBand() public {
         daiPool.setTick(101);
 
