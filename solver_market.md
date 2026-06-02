@@ -11,7 +11,7 @@ exclusive market makers and do not need a backend approval path.
 3. A solver bids only when price, size, and inventory risk fit its model.
 4. The ETH LP vault waits behind the solver-first delay and backstops only if
    the auction is still cheap and inside vault policy.
-5. Operators measure how much external solvers filled before the vault.
+5. Public reports measure how much external solvers filled before the vault.
 ```
 
 For Steady ETH rolls, the auction sells old `P` and asks for next-series `P`.
@@ -19,19 +19,23 @@ For Boosted ETH rolls, the auction sells old `N` and asks for next-series `N`.
 
 ## Discover Actions
 
-Use the public-state decision helper:
+Use the public runner in dry-run mode:
 
 ```bash
-node ops/keeper-decisions.mjs \
+node ops/keeper-runner.mjs \
+  --action solver \
   --manifest demo/contract-manifest.json \
   --rpc $RPC_URL \
-  --action solver \
   --recipient <SOLVER_RECIPIENT> \
   --max-price-wad 1000000000000000000 \
   --solver-model ops/solver-model-spread.mjs
 ```
 
-The output includes:
+The dry-run output includes a ready action and its transaction command when a
+solver bid is available. For structured JSON, call `ops/keeper-decisions.mjs`
+with the same manifest, RPC, recipient, price, and model options.
+
+The structured action includes:
 
 ```text
 type: solver-bid

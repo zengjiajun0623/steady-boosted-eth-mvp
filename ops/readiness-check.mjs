@@ -1088,7 +1088,7 @@ function checkWrappers(checks, manifest, health, args) {
       `${label} roll state is coherent`,
       keeper.rollPending
         ? `${label} roll is pending against ${keeper.pendingSeriesId}.`
-        : `${label} wrapper is idle; operators pass the next series when starting a roll.`,
+        : `${label} wrapper is idle; public runners pass the next series when starting a roll.`,
       { rollPending: keeper.rollPending, pendingSeriesId: keeper.pendingSeriesId },
     );
     addCheck(

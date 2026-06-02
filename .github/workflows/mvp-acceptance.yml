@@ -18,7 +18,7 @@ env:
 
 jobs:
   acceptance:
-    name: Contracts, Demo, Operators, Economics
+    name: Contracts, Demo, Runners, Economics
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

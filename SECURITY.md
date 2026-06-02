@@ -11,7 +11,7 @@ External audit: not complete
 Bug bounty: not active
 ```
 
-The contracts and operators are designed around strict decentralization and
+The contracts and public runners are designed around strict decentralization and
 capacity controls, but they still need security review, threat modeling, gas
 profiling, fuzzing, and production readiness evidence before launch.
 

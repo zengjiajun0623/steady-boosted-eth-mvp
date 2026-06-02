@@ -262,7 +262,7 @@ RLP only absorbs residual inventory after external N buyers and solvers bid.
 
 ## Economic stress gate
 
-The operator-facing script `ops/economic-stress-check.py` turns the RLP and
+The runner-facing script `ops/economic-stress-check.py` turns the RLP and
 N-side experiments into a repeatable launch check.
 
 Default assumption:
@@ -302,7 +302,7 @@ strict mode before raising capacity.
 
 ## Capacity policy gate
 
-The operator-facing script `ops/capacity-policy.py` turns that implication into
+The runner-facing script `ops/capacity-policy.py` turns that implication into
 an ETH-denominated launch cap. It uses the historical N-demand model to ask how
 much external Boosted/N buying capacity is needed per ETH of Steady capacity,
 then takes the minimum of:
@@ -340,8 +340,8 @@ LP capital and observable Boosted/solver demand, not merely a governance number.
 
 `ops/readiness-check.mjs` now includes the same idea in the live deployment
 gate. It reads LP vault capital, visible Boosted AMM ETH, wrapper roll caps, and
-factory series caps from onchain state. Operators can add explicitly committed
-Boosted/solver budgets:
+factory series caps from onchain state. Runners and verifiers can add explicitly
+committed Boosted/solver budgets:
 
 ```bash
 node ops/readiness-check.mjs \
