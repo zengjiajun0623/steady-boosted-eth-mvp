@@ -468,6 +468,100 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(vault.managedAssets(), 2.0029955 ether);
     }
 
+    function testFuzzSteadyProductRoundTripFeesAndInventory(uint256 rawTradeEth) public {
+        uint256 tradeEth = _boundedProductTradeEth(rawTradeEth);
+        uint256 buyFee = _productTradeFee(tradeEth);
+        uint256 productAmount = tradeEth - buyFee;
+        uint256 sellFee = _productTradeFee(productAmount);
+        uint256 ethOut = productAmount - sellFee;
+
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        assertEq(vault.quoteBuyProduct(steady, tradeEth), productAmount);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: tradeEth}(factory, oldSeriesId, steady, productAmount, alice);
+        assertEq(sharesOut, productAmount);
+        assertEq(oldN.balanceOf(address(vault)), productAmount);
+        assertEq(vault.managedAssets(), 2 ether + buyFee);
+
+        MintBurnToken steadyShare = steady.share();
+        vm.prank(alice);
+        steadyShare.approve(address(vault), sharesOut);
+
+        (uint256 quotedEthOut, uint256 quotedFee, uint256 quotedProductAmount) =
+            vault.quoteSellProduct(steady, sharesOut);
+        assertEq(quotedProductAmount, productAmount);
+        assertEq(quotedFee, sellFee);
+        assertEq(quotedEthOut, ethOut);
+
+        vm.prank(alice);
+        uint256 actualEthOut = vault.sellSteady(factory, oldSeriesId, steady, sharesOut, ethOut, alice);
+        assertEq(actualEthOut, ethOut);
+        assertEq(oldP.balanceOf(address(vault)), productAmount);
+        assertEq(oldN.balanceOf(address(vault)), productAmount);
+        assertEq(vault.activeStrategyEth(), productAmount * 2);
+        assertEq(vault.managedAssets(), 2 ether + buyFee - productAmount + sellFee);
+
+        vault.mergeSeries(factory, oldSeriesId, productAmount);
+        vault.closeStrategy();
+
+        assertEq(vault.strategyActive() ? 1 : 0, 0);
+        assertEq(vault.activeStrategyEth(), 0);
+        assertEq(vault.managedAssets(), 2 ether + buyFee + sellFee);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(oldN.balanceOf(address(vault)), 0);
+        assertEq(vault.openInventorySeriesCount(), 0);
+    }
+
+    function testFuzzBoostedProductRoundTripFeesAndInventory(uint256 rawTradeEth) public {
+        uint256 tradeEth = _boundedProductTradeEth(rawTradeEth);
+        uint256 buyFee = _productTradeFee(tradeEth);
+        uint256 productAmount = tradeEth - buyFee;
+        uint256 sellFee = _productTradeFee(productAmount);
+        uint256 ethOut = productAmount - sellFee;
+
+        _depositFromAlice(2 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        assertEq(vault.quoteBuyProduct(boosted, tradeEth), productAmount);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buyBoosted{value: tradeEth}(factory, oldSeriesId, boosted, productAmount, alice);
+        assertEq(sharesOut, productAmount);
+        assertEq(oldP.balanceOf(address(vault)), productAmount);
+        assertEq(vault.managedAssets(), 2 ether + buyFee);
+
+        MintBurnToken boostedShare = boosted.share();
+        vm.prank(alice);
+        boostedShare.approve(address(vault), sharesOut);
+
+        (uint256 quotedEthOut, uint256 quotedFee, uint256 quotedProductAmount) =
+            vault.quoteSellProduct(boosted, sharesOut);
+        assertEq(quotedProductAmount, productAmount);
+        assertEq(quotedFee, sellFee);
+        assertEq(quotedEthOut, ethOut);
+
+        vm.prank(alice);
+        uint256 actualEthOut = vault.sellBoosted(factory, oldSeriesId, boosted, sharesOut, ethOut, alice);
+        assertEq(actualEthOut, ethOut);
+        assertEq(oldP.balanceOf(address(vault)), productAmount);
+        assertEq(oldN.balanceOf(address(vault)), productAmount);
+        assertEq(vault.activeStrategyEth(), productAmount * 2);
+        assertEq(vault.managedAssets(), 2 ether + buyFee - productAmount + sellFee);
+
+        vault.mergeSeries(factory, oldSeriesId, productAmount);
+        vault.closeStrategy();
+
+        assertEq(vault.strategyActive() ? 1 : 0, 0);
+        assertEq(vault.activeStrategyEth(), 0);
+        assertEq(vault.managedAssets(), 2 ether + buyFee + sellFee);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(oldN.balanceOf(address(vault)), 0);
+        assertEq(vault.openInventorySeriesCount(), 0);
+    }
+
     function testUserProductTradeRejectsWrongWrapperSide() public {
         _depositFromAlice(2 ether);
         SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
@@ -914,6 +1008,14 @@ contract EthLPVaultTest is VaultTestBase {
 
     function _boundedSettlementPrice(uint256 rawPrice) internal pure returns (uint256) {
         return 1 + (rawPrice % 1_000_000e18);
+    }
+
+    function _boundedProductTradeEth(uint256 rawTradeEth) internal pure returns (uint256) {
+        return 0.01 ether + (rawTradeEth % 0.55 ether);
+    }
+
+    function _productTradeFee(uint256 amount) internal pure returns (uint256) {
+        return (amount * PRODUCT_TRADE_FEE_BPS) / 10_000;
     }
 
     function _seedMarket(MintBurnToken token, string memory lpName, string memory lpSymbol)
