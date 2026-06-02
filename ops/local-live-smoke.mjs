@@ -40,6 +40,7 @@ Options:
                             Permissionless keeper key (default: deterministic funded smoke key)
   --no-solver-launch        Skip external solver fill and let the ETH LP vault clear the roll
   --readiness-only          Deploy, fund the LP vault, run strict readiness, then stop
+  --negative-readiness      Also prove strict readiness rejects known-bad trust topology
   --port <port>             Anvil port (default: pick a free local port)
   --keep-anvil              Leave Anvil running after the smoke test
   --json                    Print machine-readable JSON
@@ -65,6 +66,7 @@ function parseArgs(argv) {
     keepAnvil: false,
     noSolverLaunch: false,
     readinessOnly: false,
+    negativeReadiness: false,
     json: false,
   };
 
@@ -93,6 +95,8 @@ function parseArgs(argv) {
       args.noSolverLaunch = true;
     } else if (arg === "--readiness-only") {
       args.readinessOnly = true;
+    } else if (arg === "--negative-readiness") {
+      args.negativeReadiness = true;
     } else if (arg === "--port") {
       args.port = Number(next());
       if (!Number.isInteger(args.port) || args.port <= 0) throw new Error("--port must be a positive integer");
@@ -237,6 +241,12 @@ function parseAddress(output) {
   return match[0];
 }
 
+function parseDeployedAddress(output) {
+  const match = output.match(/Deployed to:\s*(0x[a-fA-F0-9]{40})/i);
+  if (match) return match[1];
+  return parseAddress(output);
+}
+
 function parseUint(output) {
   const hex = output.match(/0x[a-fA-F0-9]+/);
   if (hex) return BigInt(hex[0]);
@@ -270,6 +280,65 @@ async function readTokenBalance(rpcUrl, token, account) {
 
 async function readManagedAssets(rpcUrl, lpVault) {
   return parseUint(await castCall(rpcUrl, lpVault, "managedAssets()(uint256)"));
+}
+
+function strictReadinessArgs({ manifestPath, rpcUrl, noSolverLaunch }) {
+  return [
+    "ops/readiness-check.mjs",
+    "--manifest",
+    manifestPath,
+    "--rpc",
+    rpcUrl,
+    "--boosted-demand-eth",
+    noSolverLaunch ? "0" : "5000",
+    "--solver-float-eth",
+    noSolverLaunch ? "0" : "250",
+    "--capacity-strict",
+    "--strict",
+    "--expect-chain-id",
+    "0x7a69",
+    ...(noSolverLaunch ? ["--no-solver-launch"] : []),
+  ];
+}
+
+async function writeTamperedManifest(tempDir, manifest, suffix, mutate) {
+  const clone = JSON.parse(JSON.stringify(manifest));
+  mutate(clone);
+  const outputPath = path.join(tempDir, `contract-manifest.${suffix}.json`);
+  await fs.writeFile(outputPath, `${JSON.stringify(clone, null, 2)}\n`);
+  return outputPath;
+}
+
+async function expectReadinessFailure({ name, manifestPath, rpcUrl, noSolverLaunch, expectedText }) {
+  try {
+    await run(process.execPath, strictReadinessArgs({ manifestPath, rpcUrl, noSolverLaunch }), {
+      timeoutMs: 180_000,
+    });
+  } catch (error) {
+    if (expectedText && !error.message.includes(expectedText)) {
+      throw new Error(`${name} failed, but not for the expected reason "${expectedText}".\n${error.message}`);
+    }
+    return error.message.split(/\r?\n/).slice(-20).join("\n");
+  }
+  throw new Error(`${name} unexpectedly passed strict readiness.`);
+}
+
+async function deployGuardedRollAuction(rpcUrl, privateKey, guardian) {
+  const output = await run("forge", [
+    "create",
+    "--rpc-url",
+    rpcUrl,
+    "--private-key",
+    privateKey,
+    "--broadcast",
+    "src/RollAuction.sol:RollAuction",
+    "--constructor-args",
+    guardian,
+    String(wei("0.01")),
+    "16",
+    "4",
+  ], { timeoutMs: 300_000 });
+  return parseDeployedAddress(output);
 }
 
 async function exerciseMarket({ rpcUrl, privateKey, account, market, buyWei, sellFractionBps }) {
@@ -359,23 +428,52 @@ async function runLiveSmoke(args) {
     const managedAtStart = await readManagedAssets(rpcUrl, contracts.lpVault);
     record("ETH LP vault funded", { lpVault: contracts.lpVault, amountWei: managedAtStart.toString() });
 
-    await run(process.execPath, [
-      "ops/readiness-check.mjs",
-      "--manifest",
+    await run(process.execPath, strictReadinessArgs({
       manifestPath,
-      "--rpc",
       rpcUrl,
-      "--boosted-demand-eth",
-      args.noSolverLaunch ? "0" : "5000",
-      "--solver-float-eth",
-      args.noSolverLaunch ? "0" : "250",
-      "--capacity-strict",
-      "--strict",
-      "--expect-chain-id",
-      "0x7a69",
-      ...(args.noSolverLaunch ? ["--no-solver-launch"] : []),
-    ], { timeoutMs: 180_000 });
+      noSolverLaunch: args.noSolverLaunch,
+    }), { timeoutMs: 180_000 });
     record(args.noSolverLaunch ? "Strict no-solver live readiness passed" : "Strict live readiness passed");
+
+    if (args.negativeReadiness) {
+      const unpinnedLpManifestPath = await writeTamperedManifest(
+        tempDir,
+        manifest,
+        "unpinned-lp-seller",
+        (draft) => {
+          draft.contracts.steadyVault = contracts.boostedVault;
+        },
+      );
+      await expectReadinessFailure({
+        name: "Unpinned LP roll seller manifest",
+        manifestPath: unpinnedLpManifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+        expectedText: "LP keeper only backstops protocol wrapper rolls",
+      });
+      record("Readiness rejects unpinned LP roll sellers", { manifestPath: unpinnedLpManifestPath });
+
+      const guardedAuction = await deployGuardedRollAuction(rpcUrl, args.deployerPrivateKey, roles.deployer);
+      const guardedAuctionManifestPath = await writeTamperedManifest(
+        tempDir,
+        manifest,
+        "guarded-auction",
+        (draft) => {
+          draft.contracts.rollAuction = guardedAuction;
+        },
+      );
+      await expectReadinessFailure({
+        name: "Guarded auction manifest",
+        manifestPath: guardedAuctionManifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+        expectedText: "auction guardian is disabled for trust-minimized launch",
+      });
+      record("Readiness rejects nonzero auction guardian by default", {
+        guardedAuction,
+        manifestPath: guardedAuctionManifestPath,
+      });
+    }
 
     if (args.readinessOnly) {
       return {

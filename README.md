@@ -144,8 +144,9 @@ close LP inventory, and check that LP managed ETH increased from the
 market-making spread.
 
 In local-live mode the acceptance gate also runs an explicit local manifest
-readiness step, so the same `ops/readiness-check.mjs` path is tested even when
-no external RPC is provided.
+readiness step, including negative probes that must reject an unpinned LP roll
+seller topology and a nonzero auction guardian by default. This tests the same
+`ops/readiness-check.mjs` path even when no external RPC is provided.
 
 GitHub Actions runs the same local-live acceptance gate on pushes and pull
 requests to `main`, so team changes should keep the contracts, demo, operators,
@@ -171,7 +172,7 @@ DeployLocalMvp: local mock-oracle deployment topology
 DeployLocalMvpManifest: broadcast-friendly local component deployer plus topology registry with optional P/N inventory markets
 DeployEthereumPilot: guarded Ethereum mainnet pilot deployment topology with optional P/N inventory markets
 ops/deploy-local-demo.mjs: one-command Anvil deploy, manifest export, and AMM seeding helper
-ops/local-live-smoke.mjs: fresh-Anvil deploy/trader/LP/solver smoke test
+ops/local-live-smoke.mjs: fresh-Anvil deploy/trader/LP/solver smoke test, including optional negative readiness probes
 ops/mvp-acceptance.mjs: local/live acceptance gate for trader, LP, solver, and decentralized-liveness requirements
 ops/solver-model-spread.mjs: reference external solver model for price-edge and fill-size decisions
 ops/readiness-check.mjs: live manifest/RPC readiness gate for trader markets, LP vault, solver auctions, keepers, settlement wiring, and decentralized liveness

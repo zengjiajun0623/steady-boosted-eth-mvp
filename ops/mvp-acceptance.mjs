@@ -353,9 +353,9 @@ function buildSteps(args) {
   } else if (!args.rpc && args.localLive) {
     steps.push({
       area: "live",
-      name: "Local manifest readiness",
+      name: "Local manifest readiness trust gates",
       command: "node",
-      args: ["ops/local-live-smoke.mjs", "--readiness-only"],
+      args: ["ops/local-live-smoke.mjs", "--readiness-only", "--negative-readiness"],
     });
   } else if (!args.rpc) {
     steps.push(skipStep("live", "Manifest readiness", "Pass --rpc or --local-live to include a manifest readiness check."));
