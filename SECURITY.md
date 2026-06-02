@@ -53,6 +53,10 @@ never overpay collateral. Full paired redemptions may leave at most 1 wei of
 rounding dust in the factory for arbitrary wei-sized positions; that is bounded
 dust, not debt.
 
+Settlement coverage includes 3-stable median TWAP tests that reject missing or
+out-of-band sources, ignore one low or high issuer outlier, and fuzz that
+settlement equals the median of the three source prices.
+
 ## Non-Negotiable Safety Rules
 
 Do not add:

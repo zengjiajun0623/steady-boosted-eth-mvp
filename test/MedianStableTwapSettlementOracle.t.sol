@@ -107,6 +107,46 @@ contract MedianStableTwapSettlementOracleTest {
         assertEq(settlementPrice, 2_000e18);
     }
 
+    function testMedianIgnoresOneHighIssuerOutlier() public {
+        MedianStableTwapSettlementOracle.PoolConfig[3] memory configs;
+        configs[0] = _poolConfig(usdcPool, 2_000e18, false, -100, 100);
+        configs[1] = _poolConfig(usdtPool, 2_050e18, false, -100, 100);
+        configs[2] = _poolConfig(daiPool, 9_000e18, false, -100, 100);
+        MedianStableTwapSettlementOracle outlierOracle =
+            new MedianStableTwapSettlementOracle(address(factory), configs);
+        bytes32 outlierSeriesId =
+            factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY_DELAY), TWAP_WINDOW, CAP, outlierOracle);
+
+        vm.warp(block.timestamp + MATURITY_DELAY);
+        factory.settle(outlierSeriesId);
+
+        (,,,,,,,,, bool settled, uint256 settlementPrice) = factory.series(outlierSeriesId);
+        assertEq(settled ? uint256(1) : uint256(0), 1);
+        assertEq(settlementPrice, 2_050e18);
+    }
+
+    function testFuzzSettlesToMedianOfThreeStableSources(uint256 rawA, uint256 rawB, uint256 rawC) public {
+        uint256 priceA = _boundedPrice(rawA);
+        uint256 priceB = _boundedPrice(rawB);
+        uint256 priceC = _boundedPrice(rawC);
+
+        MedianStableTwapSettlementOracle.PoolConfig[3] memory configs;
+        configs[0] = _poolConfig(usdcPool, priceA, false, -100, 100);
+        configs[1] = _poolConfig(usdtPool, priceB, false, -100, 100);
+        configs[2] = _poolConfig(daiPool, priceC, false, -100, 100);
+        MedianStableTwapSettlementOracle fuzzOracle =
+            new MedianStableTwapSettlementOracle(address(factory), configs);
+        bytes32 fuzzSeriesId =
+            factory.createSeries(STRIKE, uint64(block.timestamp + MATURITY_DELAY), TWAP_WINDOW, CAP, fuzzOracle);
+
+        vm.warp(block.timestamp + MATURITY_DELAY);
+        factory.settle(fuzzSeriesId);
+
+        (,,,,,,,,, bool settled, uint256 settlementPrice) = factory.series(fuzzSeriesId);
+        assertEq(settled ? uint256(1) : uint256(0), 1);
+        assertEq(settlementPrice, _median(priceA, priceB, priceC));
+    }
+
     function testRequiresAllThreeStableSourcesReady() public {
         daiPool.setShouldRevert(true);
 
@@ -146,5 +186,27 @@ contract MedianStableTwapSettlementOracleTest {
 
     function assertEq(uint256 actual, uint256 expected) internal pure {
         require(actual == expected, "uint mismatch");
+    }
+
+    function _boundedPrice(uint256 rawPrice) internal pure returns (uint256) {
+        return 1 + (rawPrice % 1_000_000e18);
+    }
+
+    function _median(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
+        uint256 temp;
+        if (a > b) {
+            temp = a;
+            a = b;
+            b = temp;
+        }
+        if (b > c) {
+            temp = b;
+            b = c;
+            c = temp;
+        }
+        if (a > b) {
+            b = a;
+        }
+        return b;
     }
 }
