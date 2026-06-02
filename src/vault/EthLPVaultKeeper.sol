@@ -125,6 +125,34 @@ contract EthLPVaultKeeper {
         _payKeeper(msg.sender, this.sellInventory.selector, amount >= minRewardedOperationAmount);
     }
 
+    function addInventoryLiquidity(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        bool useN,
+        EthTokenAMM market,
+        uint256 tokenAmount,
+        uint256 ethAmount,
+        uint256 minShares
+    ) external returns (uint256 shares, uint256 ethIn, uint256 tokenIn) {
+        (shares, ethIn, tokenIn) =
+            vault.addInventoryLiquidity(factory, seriesId, useN, market, tokenAmount, ethAmount, minShares);
+        _payKeeper(msg.sender, this.addInventoryLiquidity.selector, tokenIn >= minRewardedOperationAmount);
+    }
+
+    function removeInventoryLiquidity(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        bool useN,
+        EthTokenAMM market,
+        uint256 shares,
+        uint256 minEthOut,
+        uint256 minTokenOut
+    ) external returns (uint256 ethOut, uint256 tokenOut) {
+        (ethOut, tokenOut) =
+            vault.removeInventoryLiquidity(factory, seriesId, useN, market, shares, minEthOut, minTokenOut);
+        _payKeeper(msg.sender, this.removeInventoryLiquidity.selector, shares >= minRewardedOperationAmount);
+    }
+
     function closeStrategy() external {
         bool wasActive = vault.strategyActive();
         vault.closeStrategy();

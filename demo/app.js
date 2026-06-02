@@ -1160,6 +1160,8 @@ function decodeMarketHealth(raw) {
 }
 
 function decodeLpVaultHealth(raw) {
+  const hasSalePolicy = hasWords(raw, 21);
+  const hasMarketCounters = hasWords(raw, 23);
   return {
     vault: decodeAddress(raw, 0),
     share: decodeAddress(raw, 1),
@@ -1170,17 +1172,20 @@ function decodeLpVaultHealth(raw) {
     maxEthPerRoll: weiToEth(decodeUint(raw, 6)),
     maxActiveStrategyEth: weiToEth(decodeUint(raw, 7)),
     maxRollPrice: weiToEth(decodeUint(raw, 8)),
-    minInventorySalePrice: hasWords(raw, 21) ? weiToEth(decodeUint(raw, 9)) : 0,
-    minAuctionDuration: Number(decodeUint(raw, hasWords(raw, 21) ? 10 : 9)),
-    minBackstopDelay: Number(decodeUint(raw, hasWords(raw, 21) ? 11 : 10)),
-    minAuctionTimeLeft: Number(decodeUint(raw, hasWords(raw, 21) ? 12 : 11)),
-    maxAuctionPriceDropBps: Number(decodeUint(raw, hasWords(raw, 21) ? 13 : 12)),
-    inventorySeriesLength: Number(decodeUint(raw, hasWords(raw, 21) ? 14 : 13)),
-    utilizationBps: Number(decodeUint(raw, hasWords(raw, 21) ? 15 : 14)),
-    strategyActive: decodeBool(raw, hasWords(raw, 21) ? 16 : 15),
-    depositsPaused: decodeBool(raw, hasWords(raw, 21) ? 17 : 16),
-    totalShares: weiToEth(decodeUint(raw, hasWords(raw, 21) ? 18 : 17)),
-    sharePriceEth: weiToEth(decodeUint(raw, hasWords(raw, 21) ? 19 : 18)),
+    minInventorySalePrice: hasSalePolicy ? weiToEth(decodeUint(raw, 9)) : 0,
+    minAuctionDuration: Number(decodeUint(raw, hasSalePolicy ? 10 : 9)),
+    minBackstopDelay: Number(decodeUint(raw, hasSalePolicy ? 11 : 10)),
+    minAuctionTimeLeft: Number(decodeUint(raw, hasSalePolicy ? 12 : 11)),
+    maxAuctionPriceDropBps: Number(decodeUint(raw, hasSalePolicy ? 13 : 12)),
+    inventorySeriesLength: Number(decodeUint(raw, hasSalePolicy ? 14 : 13)),
+    inventoryMarketsLength: hasMarketCounters ? Number(decodeUint(raw, 15)) : 0,
+    utilizationBps: Number(decodeUint(raw, hasMarketCounters ? 16 : hasSalePolicy ? 15 : 14)),
+    strategyActive: decodeBool(raw, hasMarketCounters ? 17 : hasSalePolicy ? 16 : 15),
+    depositsPaused: decodeBool(raw, hasMarketCounters ? 18 : hasSalePolicy ? 17 : 16),
+    totalShares: weiToEth(decodeUint(raw, hasMarketCounters ? 19 : hasSalePolicy ? 18 : 17)),
+    sharePriceEth: weiToEth(decodeUint(raw, hasMarketCounters ? 20 : hasSalePolicy ? 19 : 18)),
+    openInventorySeriesCount: hasMarketCounters ? Number(decodeUint(raw, 21)) : null,
+    openInventoryMarketCount: hasMarketCounters ? Number(decodeUint(raw, 22)) : 0,
   };
 }
 
@@ -2461,8 +2466,11 @@ function updateProtocolHealth() {
     els.protocolHealthMarketDepth.textContent = ethAmountText(totalDepth);
     els.protocolHealthMarketDepthSub.textContent = `Steady ${ethAmountText(steadyDepth)} / Boosted ${ethAmountText(boostedDepth)}`;
     els.protocolHealthVaultUtil.textContent = pct((live.lpVault.utilizationBps || 0) / 10000);
+    const vaultMarketText = live.lpVault.openInventoryMarketCount
+      ? ` / ${live.lpVault.openInventoryMarketCount} AMM LP`
+      : "";
     els.protocolHealthVaultUtilSub.textContent = live.lpVault.strategyActive
-      ? `${ethAmountText(live.lpVault.activeStrategyEth)} active / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`
+      ? `${ethAmountText(live.lpVault.activeStrategyEth)} active${vaultMarketText} / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`
       : `${ethAmountText(live.lpVault.managedEth)} managed / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`;
     els.protocolHealthRollState.textContent = auctionOpen
       ? `${ethAmountText(live.auction.remainingEth)} open`

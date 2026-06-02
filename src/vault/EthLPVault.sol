@@ -43,6 +43,10 @@ contract EthLPVault {
     mapping(bytes32 => bool) public inventoryOpen;
     InventorySeries[] public inventorySeries;
     uint256 public openInventorySeriesCount;
+    mapping(address => bool) public inventoryMarketTracked;
+    mapping(address => bool) public inventoryMarketOpen;
+    EthTokenAMM[] public inventoryMarkets;
+    uint256 public openInventoryMarketCount;
 
     event Deposited(address indexed account, uint256 assets, uint256 shares);
     event WithdrawalRequested(address indexed account, uint256 assets, uint256 shares, uint64 unlockAt);
@@ -78,7 +82,24 @@ contract EthLPVault {
     event InventorySold(
         address indexed market, bytes32 indexed seriesId, address indexed token, uint256 tokenIn, uint256 ethOut
     );
+    event InventoryLiquidityAdded(
+        address indexed market,
+        bytes32 indexed seriesId,
+        address indexed token,
+        uint256 ethIn,
+        uint256 tokenIn,
+        uint256 shares
+    );
+    event InventoryLiquidityRemoved(
+        address indexed market,
+        bytes32 indexed seriesId,
+        address indexed token,
+        uint256 ethOut,
+        uint256 tokenOut,
+        uint256 shares
+    );
     event InventoryStatusChanged(address indexed factory, bytes32 indexed seriesId, bool open);
+    event InventoryMarketStatusChanged(address indexed market, bool open);
     event StrategyClosed();
 
     error ZeroAmount();
@@ -87,6 +108,7 @@ contract EthLPVault {
     error InventoryOpen();
     error AuctionTokenMismatch();
     error MarketTokenMismatch();
+    error MarketLiquidityMissing();
     error StrategyPolicyViolation();
     error InsufficientManagedAssets();
     error WithdrawNotReady();
@@ -326,8 +348,59 @@ contract EthLPVault {
         emit InventorySold(address(market), seriesId, address(token), amount, ethOut);
     }
 
+    function addInventoryLiquidity(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        bool useN,
+        EthTokenAMM market,
+        uint256 tokenAmount,
+        uint256 ethAmount,
+        uint256 minShares
+    ) external onlyManager returns (uint256 shares, uint256 ethIn, uint256 tokenIn) {
+        if (tokenAmount == 0 || ethAmount == 0) revert ZeroAmount();
+        if (ethAmount > managedAssets()) revert InsufficientManagedAssets();
+        if (activeStrategyEth + ethAmount > maxActiveStrategyEth) revert StrategyPolicyViolation();
+
+        _trackInventory(factory, seriesId);
+        MintBurnToken token = _matchingInventoryToken(factory, seriesId, useN, market);
+        _validateMarketLiquidityPolicy(market);
+        _trackMarket(market);
+        strategyActive = true;
+
+        token.approve(address(market), tokenAmount);
+        (shares, ethIn, tokenIn) = market.addLiquidity{value: ethAmount}(tokenAmount, minShares, address(this));
+        token.approve(address(market), 0);
+        activeStrategyEth += ethIn;
+        _refreshInventoryStatus(factory, seriesId);
+        _refreshMarketStatus(market);
+
+        emit InventoryLiquidityAdded(address(market), seriesId, address(token), ethIn, tokenIn, shares);
+    }
+
+    function removeInventoryLiquidity(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        bool useN,
+        EthTokenAMM market,
+        uint256 shares,
+        uint256 minEthOut,
+        uint256 minTokenOut
+    ) external onlyManager returns (uint256 ethOut, uint256 tokenOut) {
+        if (shares == 0) revert ZeroAmount();
+
+        _trackInventory(factory, seriesId);
+        MintBurnToken token = _matchingInventoryToken(factory, seriesId, useN, market);
+        _trackMarket(market);
+
+        (ethOut, tokenOut) = market.removeLiquidity(shares, minEthOut, minTokenOut, address(this));
+        _refreshMarketStatus(market);
+        _refreshInventoryStatus(factory, seriesId);
+
+        emit InventoryLiquidityRemoved(address(market), seriesId, address(token), ethOut, tokenOut, shares);
+    }
+
     function closeStrategy() external onlyManager {
-        if (openInventorySeriesCount != 0) revert InventoryOpen();
+        if (openInventorySeriesCount != 0 || openInventoryMarketCount != 0) revert InventoryOpen();
 
         strategyActive = false;
         activeStrategyEth = 0;
@@ -355,6 +428,10 @@ contract EthLPVault {
         return inventorySeries.length;
     }
 
+    function inventoryMarketsLength() external view returns (uint256) {
+        return inventoryMarkets.length;
+    }
+
     function _trackInventory(EthOptionsFactory factory, bytes32 seriesId) internal {
         bytes32 key = _inventoryKey(factory, seriesId);
         if (inventoryTracked[key]) return;
@@ -380,6 +457,31 @@ contract EthLPVault {
         emit InventoryStatusChanged(address(factory), seriesId, currentlyOpen);
     }
 
+    function _trackMarket(EthTokenAMM market) internal {
+        address marketAddress = address(market);
+        if (inventoryMarketTracked[marketAddress]) return;
+
+        if (marketAddress == address(0)) revert MarketTokenMismatch();
+        market.lpToken();
+        inventoryMarketTracked[marketAddress] = true;
+        inventoryMarkets.push(market);
+    }
+
+    function _refreshMarketStatus(EthTokenAMM market) internal {
+        address marketAddress = address(market);
+        bool currentlyOpen = market.lpToken().balanceOf(address(this)) != 0;
+        bool wasOpen = inventoryMarketOpen[marketAddress];
+        if (currentlyOpen == wasOpen) return;
+
+        inventoryMarketOpen[marketAddress] = currentlyOpen;
+        if (currentlyOpen) {
+            openInventoryMarketCount += 1;
+        } else {
+            openInventoryMarketCount -= 1;
+        }
+        emit InventoryMarketStatusChanged(marketAddress, currentlyOpen);
+    }
+
     function _inventoryKey(EthOptionsFactory factory, bytes32 seriesId) internal pure returns (bytes32) {
         return keccak256(abi.encode(factory, seriesId));
     }
@@ -390,6 +492,26 @@ contract EthLPVault {
         returns (MintBurnToken pToken, MintBurnToken nToken)
     {
         (,,,,,, pToken, nToken,,,) = factory.series(seriesId);
+    }
+
+    function _matchingInventoryToken(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        bool useN,
+        EthTokenAMM market
+    ) internal view returns (MintBurnToken token) {
+        (MintBurnToken pToken, MintBurnToken nToken) = _tokens(factory, seriesId);
+        token = useN ? nToken : pToken;
+        if (address(market) == address(0) || address(market.token()) != address(token)) revert MarketTokenMismatch();
+    }
+
+    function _validateMarketLiquidityPolicy(EthTokenAMM market) internal view {
+        uint256 ethReserve = market.ethReserve();
+        uint256 tokenReserve = market.tokenReserve();
+        if (ethReserve == 0 || tokenReserve == 0) revert MarketLiquidityMissing();
+
+        uint256 poolPriceWad = (ethReserve * WAD) / tokenReserve;
+        if (poolPriceWad < minInventorySalePriceWad) revert StrategyPolicyViolation();
     }
 
     function _mulDivUp(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256) {

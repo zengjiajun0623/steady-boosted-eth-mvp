@@ -135,7 +135,7 @@ Roll liquidity:
   RollAuction public Dutch auctions for wrapper maturity rotation
 
 Bootstrap liquidity:
-  EthLPVault plus EthLPVaultKeeper
+  EthLPVault plus EthLPVaultKeeper for roll backstops and vault-owned AMM liquidity
 
 External competition:
   RollSolver and keeper-runner solver actions
@@ -193,10 +193,10 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
 2. Vault strategy
 
-   Extend the deterministic strategy planner into dashboard and keeper-runner
-   workflows around bid sizing, inventory cleanup, solver-first delay, and risk
-   reporting. The vault should remain the transparent protocol liquidity engine,
-   not a hidden discretionary bailout.
+Extend the deterministic strategy planner into dashboard and keeper-runner
+workflows around bid sizing, inventory cleanup, AMM liquidity provision,
+solver-first delay, and risk reporting. The vault should remain the transparent
+protocol liquidity engine, not a hidden discretionary bailout.
 
 3. Solver market
 

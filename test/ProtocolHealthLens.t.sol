@@ -49,7 +49,9 @@ contract ProtocolHealthLensTest {
         assertEq(lp.strategyUtilizationBps, 0);
         assertEq(lp.totalShares, 0);
         assertEq(lp.sharePriceWad, 1e18);
+        assertEq(lp.inventoryMarketsLength, 0);
         assertEq(lp.openInventorySeriesCount, 0);
+        assertEq(lp.openInventoryMarketCount, 0);
         require(!lp.depositsPaused, "lp deposits paused");
 
         ProtocolHealthLens.WrapperHealth memory wrapper = lens.wrapperHealth(steadyVault);
@@ -229,6 +231,48 @@ contract ProtocolHealthLensTest {
         assertEq(newSeries.mergeableAmount, 0.10025 ether);
         assertEq(newSeries.unpairedN, 0.49975 ether);
         require(newSeries.hasInventory, "new inventory missing");
+    }
+
+    function testReadsLpVaultMarketLiquidityHealth() public {
+        DeployLocalMvp deployer = _seededLocalDeployment();
+        ProtocolHealthLens lens = deployer.healthLens();
+        (,,,,, EthLPVault lpVault) = deployer.core();
+
+        {
+            (
+                EthOptionsFactory factory,
+                ,
+                RollAuction rollAuction,
+                ,
+                EthLPVaultKeeper lpKeeper,
+            ) = deployer.core();
+            (bytes32 firstSeriesId, bytes32 secondSeriesId,,,,) = deployer.series();
+            (,,, EthTokenAMM secondNMarket) = deployer.inventoryMarkets();
+            (SeriesExposureVaultKeeper steadyKeeper,) = deployer.wrapperKeepers();
+
+            vm.deal(address(this), 4 ether);
+            lpVault.deposit{value: 2 ether}();
+            uint256 auctionId = steadyKeeper.startRoll(secondSeriesId, 1 ether, 1e18, 0.999e18, 1 days);
+
+            vm.warp(block.timestamp + 12 hours);
+            lpKeeper.fillSteadyRoll(
+                factory, rollAuction, firstSeriesId, secondSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether
+            );
+
+            deployer.seedInventoryMarket{value: 2 ether}(true, true, 1 ether, 1 ether, address(this));
+            lpKeeper.addInventoryLiquidity(factory, secondSeriesId, true, secondNMarket, 0.1 ether, 0.1 ether, 0);
+        }
+
+        ProtocolHealthLens.LpVaultHealth memory vaultHealth = lens.lpVaultHealth(lpVault);
+        assertEq(vaultHealth.inventoryMarketsLength, 1);
+        assertEq(vaultHealth.openInventoryMarketCount, 1);
+
+        ProtocolHealthLens.LpMarketLiquidityHealth memory market = lens.lpMarketLiquidityHealth(lpVault, 0);
+        assertEq(market.vault, address(lpVault));
+        assertEq(market.index, 0);
+        assertEq(market.vaultMarketShares, 0.1 ether);
+        require(market.hasMarketLiquidity, "missing market liquidity");
+        require(market.hasVaultLiquidity, "missing vault market liquidity");
     }
 
     function testReadsLpAccountPendingWithdrawalHealth() public {

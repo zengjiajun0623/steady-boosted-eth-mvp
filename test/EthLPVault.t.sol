@@ -176,6 +176,57 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(vault.openInventorySeriesCount(), 2);
     }
 
+    function testManagerCanProvideTrackedInventoryAsPublicAmmLiquidity() public {
+        _depositFromAlice(2 ether);
+        uint256 auctionId = _createOldPAuction(1 ether);
+
+        vm.warp(block.timestamp + 12 hours);
+        vault.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether);
+
+        EthTokenAMM market = _seedMarket(newN, "newN direct market", "newN-LP");
+        uint256 managedBefore = vault.managedAssets();
+        (uint256 shares, uint256 ethIn, uint256 tokenIn) =
+            vault.addInventoryLiquidity(factory, newSeriesId, true, market, 0.2 ether, 0.2 ether, 0.2 ether);
+
+        assertEq(shares, 0.2 ether);
+        assertEq(ethIn, 0.2 ether);
+        assertEq(tokenIn, 0.2 ether);
+        assertEq(vault.managedAssets(), managedBefore - 0.2 ether);
+        assertEq(vault.activeStrategyEth(), 0.8 ether);
+        assertEq(vault.inventoryMarketsLength(), 1);
+        assertEq(vault.openInventoryMarketCount(), 1);
+        assertEq(market.lpToken().balanceOf(address(vault)), 0.2 ether);
+        assertEq(newN.balanceOf(address(vault)), 0.4 ether);
+
+        vm.expectRevert(EthLPVault.InventoryOpen.selector);
+        vault.closeStrategy();
+
+        (uint256 ethOut, uint256 tokenOut) =
+            vault.removeInventoryLiquidity(factory, newSeriesId, true, market, shares, 0.2 ether, 0.2 ether);
+
+        assertEq(ethOut, 0.2 ether);
+        assertEq(tokenOut, 0.2 ether);
+        assertEq(vault.openInventoryMarketCount(), 0);
+        assertEq(market.lpToken().balanceOf(address(vault)), 0);
+        assertEq(newN.balanceOf(address(vault)), 0.6 ether);
+    }
+
+    function testInventoryLiquidityRejectsUnseededOrBadPriceMarket() public {
+        _depositFromAlice(2 ether);
+        uint256 auctionId = _createOldPAuction(1 ether);
+
+        vm.warp(block.timestamp + 12 hours);
+        vault.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether);
+
+        EthTokenAMM emptyMarket = new EthTokenAMM(IERC20Like(address(newN)), "empty newN market", "emptyN-LP", 30);
+        vm.expectRevert(EthLPVault.MarketLiquidityMissing.selector);
+        vault.addInventoryLiquidity(factory, newSeriesId, true, emptyMarket, 0.2 ether, 0.2 ether, 0);
+
+        EthTokenAMM badMarket = _seedBadMarket(newN, "bad newN liquidity market", "badN-LP");
+        vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
+        vault.addInventoryLiquidity(factory, newSeriesId, true, badMarket, 0.2 ether, 0.2 ether, 0);
+    }
+
     function testInventorySaleRejectsBelowVaultPriceFloor() public {
         _depositFromAlice(2 ether);
         uint256 auctionId = _createOldPAuction(1 ether);

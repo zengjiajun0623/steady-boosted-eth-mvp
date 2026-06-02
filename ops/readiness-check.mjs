@@ -446,6 +446,8 @@ function decodeMarketHealth(raw) {
 }
 
 function decodeLpVaultHealth(raw) {
+  const hasSalePolicy = hasWords(raw, 21);
+  const hasMarketCounters = hasWords(raw, 23);
   return {
     vault: decodeAddress(raw, 0),
     share: decodeAddress(raw, 1),
@@ -456,18 +458,20 @@ function decodeLpVaultHealth(raw) {
     maxEthPerRoll: decodeUint(raw, 6),
     maxActiveStrategyEth: decodeUint(raw, 7),
     maxRollPriceWad: decodeUint(raw, 8),
-    minInventorySalePriceWad: hasWords(raw, 21) ? decodeUint(raw, 9) : 0n,
-    minAuctionDuration: decodeUint(raw, hasWords(raw, 21) ? 10 : 9),
-    minBackstopDelay: decodeUint(raw, hasWords(raw, 21) ? 11 : 10),
-    minAuctionTimeLeft: decodeUint(raw, hasWords(raw, 21) ? 12 : 11),
-    maxAuctionPriceDropBps: decodeUint(raw, hasWords(raw, 21) ? 13 : 12),
-    inventorySeriesLength: decodeUint(raw, hasWords(raw, 21) ? 14 : 13),
-    strategyUtilizationBps: decodeUint(raw, hasWords(raw, 21) ? 15 : 14),
-    strategyActive: decodeBool(raw, hasWords(raw, 21) ? 16 : 15),
-    depositsPaused: decodeBool(raw, hasWords(raw, 21) ? 17 : 16),
-    totalShares: decodeUint(raw, hasWords(raw, 21) ? 18 : 17),
-    sharePriceWad: decodeUint(raw, hasWords(raw, 21) ? 19 : 18),
-    openInventorySeriesCount: hasWords(raw, 21) ? decodeUint(raw, 20) : hasWords(raw, 20) ? decodeUint(raw, 19) : null,
+    minInventorySalePriceWad: hasSalePolicy ? decodeUint(raw, 9) : 0n,
+    minAuctionDuration: decodeUint(raw, hasSalePolicy ? 10 : 9),
+    minBackstopDelay: decodeUint(raw, hasSalePolicy ? 11 : 10),
+    minAuctionTimeLeft: decodeUint(raw, hasSalePolicy ? 12 : 11),
+    maxAuctionPriceDropBps: decodeUint(raw, hasSalePolicy ? 13 : 12),
+    inventorySeriesLength: decodeUint(raw, hasSalePolicy ? 14 : 13),
+    inventoryMarketsLength: hasMarketCounters ? decodeUint(raw, 15) : 0n,
+    strategyUtilizationBps: decodeUint(raw, hasMarketCounters ? 16 : hasSalePolicy ? 15 : 14),
+    strategyActive: decodeBool(raw, hasMarketCounters ? 17 : hasSalePolicy ? 16 : 15),
+    depositsPaused: decodeBool(raw, hasMarketCounters ? 18 : hasSalePolicy ? 17 : 16),
+    totalShares: decodeUint(raw, hasMarketCounters ? 19 : hasSalePolicy ? 18 : 17),
+    sharePriceWad: decodeUint(raw, hasMarketCounters ? 20 : hasSalePolicy ? 19 : 18),
+    openInventorySeriesCount: hasMarketCounters ? decodeUint(raw, 21) : hasSalePolicy ? decodeUint(raw, 20) : null,
+    openInventoryMarketCount: hasMarketCounters ? decodeUint(raw, 22) : 0n,
   };
 }
 
@@ -897,14 +901,25 @@ function checkLpVault(checks, manifest, health, args) {
   );
   addCheck(
     checks,
-    !vault.strategyActive || openInventory.length > 0 ? "pass" : "fail",
+    vault.inventoryMarketsLength >= vault.openInventoryMarketCount ? "pass" : "warn",
+    "lp",
+    "LP AMM liquidity counter is readable",
+    vault.openInventoryMarketCount === 0n
+      ? "Vault has no open AMM LP positions."
+      : `Vault has ${vault.openInventoryMarketCount.toString()} open AMM LP position(s) across ${vault.inventoryMarketsLength.toString()} tracked market(s).`,
+    { inventoryMarketsLength: vault.inventoryMarketsLength, openInventoryMarketCount: vault.openInventoryMarketCount },
+  );
+  addCheck(
+    checks,
+    !vault.strategyActive || openInventory.length > 0 || vault.openInventoryMarketCount > 0n ? "pass" : "fail",
     "lp",
     "active LP strategy has visible inventory",
     vault.strategyActive
-      ? `Strategy is active with ${openInventory.length.toString()} inventory entries carrying P/N balances.`
+      ? `Strategy is active with ${openInventory.length.toString()} P/N inventory entries and ${vault.openInventoryMarketCount.toString()} AMM LP position(s).`
       : "Strategy is idle with no active roll inventory requirement.",
     {
       strategyActive: vault.strategyActive,
+      openInventoryMarketCount: vault.openInventoryMarketCount,
       openInventory: openInventory.map((item) => ({
         seriesId: item.seriesId,
         pBalance: item.pBalance,

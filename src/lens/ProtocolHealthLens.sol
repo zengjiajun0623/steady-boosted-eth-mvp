@@ -46,12 +46,14 @@ contract ProtocolHealthLens {
         uint64 minAuctionTimeLeft;
         uint16 maxAuctionPriceDropBps;
         uint256 inventorySeriesLength;
+        uint256 inventoryMarketsLength;
         uint256 strategyUtilizationBps;
         bool strategyActive;
         bool depositsPaused;
         uint256 totalShares;
         uint256 sharePriceWad;
         uint256 openInventorySeriesCount;
+        uint256 openInventoryMarketCount;
     }
 
     struct LpInventoryHealth {
@@ -71,6 +73,21 @@ contract ProtocolHealthLens {
         bool settled;
         bool matured;
         bool hasInventory;
+    }
+
+    struct LpMarketLiquidityHealth {
+        address vault;
+        uint256 index;
+        address market;
+        address token;
+        address lpToken;
+        uint256 ethReserve;
+        uint256 tokenReserve;
+        uint256 totalMarketShares;
+        uint256 vaultMarketShares;
+        uint256 vaultShareBps;
+        bool hasMarketLiquidity;
+        bool hasVaultLiquidity;
     }
 
     struct LpAccountHealth {
@@ -219,7 +236,9 @@ contract ProtocolHealthLens {
         health.minAuctionTimeLeft = vault.minAuctionTimeLeft();
         health.maxAuctionPriceDropBps = vault.maxAuctionPriceDropBps();
         health.inventorySeriesLength = vault.inventorySeriesLength();
+        health.inventoryMarketsLength = vault.inventoryMarketsLength();
         health.openInventorySeriesCount = vault.openInventorySeriesCount();
+        health.openInventoryMarketCount = vault.openInventoryMarketCount();
         health.strategyActive = vault.strategyActive();
         health.depositsPaused = health.strategyActive;
         health.strategyUtilizationBps =
@@ -269,6 +288,32 @@ contract ProtocolHealthLens {
             settled: settled,
             matured: block.timestamp >= maturity,
             hasInventory: pBalance != 0 || nBalance != 0
+        });
+    }
+
+    function lpMarketLiquidityHealth(EthLPVault vault, uint256 index)
+        external
+        view
+        returns (LpMarketLiquidityHealth memory health)
+    {
+        EthTokenAMM market = vault.inventoryMarkets(index);
+        MintBurnToken lpToken = market.lpToken();
+        uint256 totalShares = lpToken.totalSupply();
+        uint256 vaultShares = lpToken.balanceOf(address(vault));
+
+        health = LpMarketLiquidityHealth({
+            vault: address(vault),
+            index: index,
+            market: address(market),
+            token: address(market.token()),
+            lpToken: address(lpToken),
+            ethReserve: market.ethReserve(),
+            tokenReserve: market.tokenReserve(),
+            totalMarketShares: totalShares,
+            vaultMarketShares: vaultShares,
+            vaultShareBps: totalShares == 0 ? 0 : (vaultShares * BPS) / totalShares,
+            hasMarketLiquidity: market.ethReserve() != 0 && market.tokenReserve() != 0,
+            hasVaultLiquidity: vaultShares != 0
         });
     }
 

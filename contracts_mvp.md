@@ -52,6 +52,7 @@ vault uses ETH to mint the next P/N pair
 vault pays a Steady roll auction with new P, or a Boosted roll auction with new N
 vault receives old inventory plus leftover newly minted P/N inventory
 vault can sell tracked inventory through a matching public ETH/token AMM only above its sale floor
+vault can pair tracked inventory with ETH in an already-seeded matching AMM above the same floor
 vault later merges or redeems inventory back to ETH
 ```
 
@@ -69,8 +70,9 @@ minimum auction duration
 For a more decentralized deployment, set `EthLPVaultKeeper` as the vault
 manager. The keeper is a permissionless facade: anyone can call it to fill
 allowed roll auctions, sell tracked inventory through matching public markets,
-redeem settled inventory, merge matched inventory, or close the strategy. The
-keeper cannot bypass the vault's immutable limits.
+pair tracked inventory with ETH as public AMM liquidity, remove vault-owned AMM
+liquidity, redeem settled inventory, merge matched inventory, or close the
+strategy. The keeper cannot bypass the vault's immutable limits.
 The keeper also pins the Steady and Boosted wrapper addresses as the only roll
 auction sellers it will backstop, so arbitrary matching-token auctions cannot
 consume LP-vault capacity.
@@ -85,11 +87,14 @@ The preferred LP inventory cleanup order is:
 matched P + N before settlement -> merge directly back to ETH
 settled P or N after settlement -> redeem directly back to ETH
 remaining unpaired unsettled P or N -> sell through a matching public AMM
+or pair it with ETH as matching public AMM liquidity
 ```
 
 This reduces the number of cases where the LP vault needs a new counterparty. A
 counterparty is still needed for unpaired, unsettled inventory, but not for
-matched balances or settled balances.
+matched balances or settled balances. AMM liquidity provision requires an
+already-seeded matching market above the immutable sale floor, so the vault
+cannot create arbitrary bad-price pools with depositor ETH.
 
 The LP vault earns when it backstops a roll at a favorable discount and the
 received inventory later merges, redeems, or sells for more ETH than the vault
@@ -154,6 +159,8 @@ anyone calls keeper.fillBoostedRoll(...)
 vault enforces max size, active inventory cap, max price, solver-first delay,
 auction duration, minimum time left, and maximum Dutch price decay
 anyone calls keeper.sellInventory(...) when a tracked P/N token has a matching AMM and the quote is above the vault sale floor
+anyone calls keeper.addInventoryLiquidity(...) to pair tracked inventory with ETH in a matching seeded AMM above the same floor
+anyone calls keeper.removeInventoryLiquidity(...) to recover ETH and inventory from vault-owned AMM LP shares
 anyone calls keeper.redeemP/redeemN/mergeSeries/closeStrategy when inventory resolves
 ```
 
@@ -624,10 +631,13 @@ deployers reject LP inventory-sale floors below the normal roll-cost target
 ETH LP strategy rejects active inventory above cap
 ETH LP vault can merge matched inventory after maturity before settlement
 ETH LP vault can sell tracked inventory through a matching public AMM
+ETH LP vault can provide tracked inventory plus ETH as matching public AMM liquidity
 ETH LP vault rejects inventory sales below its immutable sale floor
+ETH LP vault rejects AMM liquidity provision into unseeded or below-floor markets
 ETH LP vault rejects inventory sales through mismatched AMMs
 permissionless keeper can execute allowed ETH LP vault bids
 permissionless keeper can sell tracked ETH LP vault inventory through public AMMs
+permissionless keeper can add and remove vault-owned AMM liquidity
 funded ETH LP keeper pays a bounty on useful strategy actions
 inactive ETH LP close calls cannot drain keeper rewards
 permissionless keeper cannot bypass ETH LP vault policy

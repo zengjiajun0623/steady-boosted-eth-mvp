@@ -442,7 +442,7 @@ function printReport(report) {
   console.log("Covers:");
   console.log("- Trader: Steady/Boosted ETH buy/sell markets and demo trading surface.");
   console.log("- Frontend: wallet-connected trader, LP, solver, keeper, and settlement action surface.");
-  console.log("- LP: ETH vault deposit/withdraw, roll backstop, inventory cleanup, return check, and capacity policy.");
+  console.log("- LP: ETH vault deposit/withdraw, roll backstop, AMM liquidity support, inventory cleanup, return check, and capacity policy.");
   console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and expensive-roll rejection.");
   console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, keeper discovery, and solver-vault fill attribution.");
   console.log("- Rotation: historical 10 bps roll-cost gate plus a live 10 bps public roll smoke.");

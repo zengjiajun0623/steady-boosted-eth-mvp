@@ -258,6 +258,39 @@ contract EthLPVaultKeeperTest {
         assertEq(caller.balance, callerBefore + KEEPER_REWARD);
     }
 
+    function testPermissionlessKeeperCanAddAndRemoveInventoryLiquidity() public {
+        uint256 auctionId = _createOldPAuction(1 ether);
+        vm.deal(address(keeper), 3 * KEEPER_REWARD);
+
+        vm.warp(block.timestamp + 12 hours);
+        vm.prank(caller);
+        keeper.fillSteadyRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether);
+
+        EthTokenAMM market = _seedMarket(newN, "newN direct market", "newN-LP");
+        uint256 callerBefore = caller.balance;
+
+        vm.prank(caller);
+        (uint256 shares, uint256 ethIn, uint256 tokenIn) =
+            keeper.addInventoryLiquidity(factory, newSeriesId, true, market, 0.2 ether, 0.2 ether, 0.2 ether);
+
+        assertEq(shares, 0.2 ether);
+        assertEq(ethIn, 0.2 ether);
+        assertEq(tokenIn, 0.2 ether);
+        assertEq(vault.openInventoryMarketCount(), 1);
+        assertEq(market.lpToken().balanceOf(address(vault)), 0.2 ether);
+        assertEq(caller.balance, callerBefore + KEEPER_REWARD);
+
+        vm.prank(caller);
+        (uint256 ethOut, uint256 tokenOut) =
+            keeper.removeInventoryLiquidity(factory, newSeriesId, true, market, shares, 0.2 ether, 0.2 ether);
+
+        assertEq(ethOut, 0.2 ether);
+        assertEq(tokenOut, 0.2 ether);
+        assertEq(vault.openInventoryMarketCount(), 0);
+        assertEq(market.lpToken().balanceOf(address(vault)), 0);
+        assertEq(caller.balance, callerBefore + 2 * KEEPER_REWARD);
+    }
+
     function testInactiveCloseDoesNotDrainKeeperRewards() public {
         vm.deal(address(keeper), KEEPER_REWARD);
 
