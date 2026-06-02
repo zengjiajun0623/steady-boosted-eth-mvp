@@ -1,254 +1,190 @@
-# Index Options Simulator
+# Steady ETH / Boosted ETH Protocol MVP
 
-Small research simulator for the options-based index tracking idea described in:
+This repo is a working MVP for an ETH-native exposure product.
+
+The product is built around a simple user choice:
+
+```text
+Hold Steady ETH if you want smoother ETH exposure.
+Hold Boosted ETH if you want more upside and can accept more downside.
+Deposit ETH into the LP vault if you want to provide protocol liquidity.
+Run a solver or keeper if you want to compete to clear public rolls.
+```
+
+The original research thread is here:
 
 https://ethresear.ch/t/building-index-tracking-assets-on-top-of-options-instead-of-debt/25036
 
-The first model focuses on a USD-tracking `P_K` token backed by ETH.
+## User Stories
 
-## Team Handoff
+### Trader
 
-Start with `TEAM_HANDOFF.md` if you are joining the project. It explains the
-product mental model, the strict invariants, the test commands, and the next
-workstreams.
+A trader already holds ETH, but wants a different risk profile.
 
-Use `CONTRIBUTING.md` for PR expectations and `SECURITY.md` for the current
-security posture.
+If they want ETH exposure that moves more calmly, they buy Steady ETH with ETH.
+If they want a higher-upside version of ETH and accept the extra risk, they buy
+Boosted ETH with ETH. When they want out, they sell back into ETH.
 
-## Token model
+The trader should not need to understand roll auctions, settlement windows, or
+vault inventory. Their page should feel like a simple ETH-native buy/sell flow.
 
-For a strike `K` in USD per ETH, one dollar-normalized `P_K` unit is backed by
-`1 / K` ETH and pays at maturity:
+### Liquidity Provider
 
-```text
-min(1, ETHUSD / K) dollars
-```
+An LP deposits ETH into the protocol LP vault.
 
-Equivalently, it behaves like `$1` minus `1 / K` of an ETH put option. When ETH
-is far above `K`, `P_K` should trade close to `$1`; as ETH approaches `K`, it
-develops quadratic drift away from the dollar target.
+The vault helps the market work: it can backstop maturity rolls, support
+liquidity, and clean up option inventory. The LP earns when those actions make
+profitable market-making PnL. The LP can also lose money when the vault takes
+bad inventory risk or the market moves against it.
 
-This is a pragmatic normalization of the post's ETH-collateralized `P/N` pair:
-one full ETH split can be viewed as creating `K` dollar-normalized units.
+There is no guaranteed yield. The vault should show risk, open inventory,
+capacity, and withdrawal state plainly.
 
-## Run
+### Solver
 
-```bash
-python3 sim.py --start 2018-01-01 --end 2026-06-01
-```
+A solver watches public roll auctions.
 
-The script fetches ETH-USD daily candles from Yahoo Finance, caches them under
-`data/`, and prints a strategy comparison table.
+When Steady ETH or Boosted ETH needs to rotate into the next maturity, the roll
+is exposed as an onchain Dutch auction. Solvers can bid permissionlessly. If a
+solver can clear the roll at a better price before the ETH LP vault steps in,
+they improve execution for the product and can be measured from public events.
 
-## Browser demo
+The ETH LP vault is the launch liquidity engine. Solvers compete around it; they
+do not need to be exclusive market makers.
+
+### Operator
+
+An operator keeps the system honest.
+
+Before capacity grows, they run readiness and capacity gates. If normal rolls
+cannot clear inside the low-cost band, the right product answer is to pause
+growth, shrink capacity, or require more backstop/solver liquidity. It should
+not quietly force users through expensive rotation.
+
+## Try The Demo
 
 ```bash
 python3 -m http.server 8765
 ```
 
-Then open:
+Open:
 
 ```text
 http://localhost:8765/demo/
 ```
 
-The demo has separate pages for traders and liquidity providers. The trader page
-shows Steady/Boosted exposure in simple terms; the liquidity-provider page shows
-roll-vault capacity, expected quote width, and TWAP safety caps.
+The demo separates the experience by user:
 
-To explore roll venues and liquidity depth:
-
-```bash
-python3 roll_market.py --start 2018-01-01 --end 2026-06-01
+```text
+Trade: buy and sell Steady ETH or Boosted ETH with ETH
+Vault: deposit ETH into the liquidity vault and see vault risk
+Auctions: inspect solver/keeper roll activity
 ```
 
-This compares immediate AMM-style execution against delayed RFQ/batch venues
-whose cost depends on order size, daily depth, and waiting time.
+## Run The MVP
 
-To inspect the `N` side created opposite stability demand:
-
-```bash
-python3 n_side.py --start 2018-01-01 --end 2026-06-01
-```
-
-To estimate how much recurring `N` demand a Steady vault requires:
-
-```bash
-python3 n_demand.py --start 2018-01-01 --end 2026-06-01
-```
-
-To model an HLP-like roll liquidity vault:
-
-```bash
-python3 rlp_sim.py --start 2018-01-01 --end 2026-06-01
-```
-
-To mark the RLP vault's residual inventory risk:
-
-```bash
-python3 rlp_risk.py --start 2018-01-01 --end 2026-06-01
-```
-
-To produce user-facing risk bands:
-
-```bash
-python3 user_bands.py --start 2018-01-01 --end 2026-06-01 --cost-bps 10
-```
-
-To compare idealized versus standardized strikes and expiries:
-
-```bash
-python3 standardization.py --start 2018-01-01 --end 2026-06-01 --cost-bps 10
-```
-
-To estimate rough open-interest caps for onchain TWAP settlement:
-
-```bash
-python3 twap_caps.py --depth-1pct 10000000 --target-bps 50,100,500
-```
-
-See `decentralized_mvp.md` for the simplified trust-minimized design and
-`oracle_settlement.md` for the broader oracle/settlement notes.
-
-## Contract MVP
-
-The first Solidity core is under `src/` and uses Foundry:
+Run the contract suite:
 
 ```bash
 forge test -vvv
 ```
 
-For the full MVP acceptance gate, run:
-
-```bash
-node ops/mvp-acceptance.mjs
-```
-
-That command checks the contract product loop, the trader demo surface, the
-keeper/solver scripts, historical roll economics, and the ETH-denominated
-launch capacity policy. Add `--rpc <RPC_URL>` after deploying a manifest to
-include the live decentralized readiness check.
-
-For a heavier local-chain proof, run:
+Run the full local acceptance gate:
 
 ```bash
 node ops/mvp-acceptance.mjs --local-live
 ```
 
-It starts Anvil, deploys and seeds the MVP, funds separate trader/LP/solver/
-keeper accounts, deposits the ETH LP vault, runs strict live readiness, buys and
-sells Steady/Boosted ETH, then uses `ops/keeper-runner.mjs` to prove two roll
-paths: external solver plus ETH LP vault, and no-solver launch where the ETH LP
-vault clears the roll alone. Both paths finalize the wrapper roll, redeem and
-close LP inventory, and check that LP managed ETH increased from the
-market-making spread.
-
-In local-live mode the acceptance gate also runs an explicit local manifest
-readiness step, including negative probes that must reject an unpinned LP roll
-seller topology and a nonzero auction guardian by default. Readiness also makes
-wrapper deposit-growth pauses visible, so a failed cheap roll stops new capacity
-instead of being hidden behind normal UX. This tests the same
-`ops/readiness-check.mjs` path even when no external RPC is provided.
+That command starts a fresh local chain, deploys and seeds the MVP, funds
+separate trader/LP/solver/keeper accounts, runs strict readiness, executes
+Steady/Boosted buy and sell flows, proves an external-solver roll path, proves a
+no-solver vault-only launch path, settles inventory, and checks that LP vault
+accounting remains visible.
 
 GitHub Actions runs the same local-live acceptance gate on pushes and pull
-requests to `main`, so team changes should keep the contracts, demo, operators,
-economics, and no-solver launch path green before merging.
+requests to `main`.
 
-Implemented:
+## What Must Stay True
+
+These are product requirements, not implementation preferences:
 
 ```text
-EthOptionsFactory: ETH-backed P/N option split
-SeriesExposureVault: auto-rolling Steady/Boosted series-token wrapper with immutable deposit capacity
-SeriesExposureVaultKeeper: permissionless keeper facade for start/reset/finalize/cancel wrapper rolls, dust limits, product roll-size caps, and optional maintenance bounties
-EthLPVault: ETH LP vault with conservative roll-bidding inventory accounting, direct merge/redeem cleanup paths, guarded AMM inventory sales, immutable size/price limits, solver-first delay, and auction freshness limits
-EthLPVaultKeeper: permissionless keeper facade for allowed LP bid/cleanup actions with wrapper-seller pinning and optional funded bounties
-EthTokenAMM: ETH market for buying/selling continuous Steady/Boosted wrapper shares
-RollAuction: permissionless Dutch auction for old-series/new-series rolls, including callback settlement, dust rules, active-auction flood limits, stale price-decay reset, and optional guardian circuit-breaker levels
-RollSolver: atomic helper for external solvers to mint/source payment during roll auction settlement, including fill-all paths for clearing the current remainder
-ProtocolHealthLens: read-only operator/risk dashboard helper, including auction reset readiness, LP share/account, LP inventory, and wrapper-keeper policy views
-MockSettlementOracle: local/test settlement adapter
-UniswapV3TwapSettlementOracle: maturity-anchored cumulative tick TWAP adapter
-MedianStableTwapSettlementOracle: median of USDC, USDT, and DAI Uniswap v3 TWAPs
-EthereumMainnetOracleConfig: guarded mainnet 3-stable median TWAP config
-DeployLocalMvp: local mock-oracle deployment topology
-DeployLocalMvpManifest: broadcast-friendly local component deployer plus topology registry with optional P/N inventory markets
-DeployEthereumPilot: guarded Ethereum mainnet pilot deployment topology with optional P/N inventory markets
-ops/deploy-local-demo.mjs: one-command Anvil deploy, manifest export, and AMM seeding helper
-ops/frontend-live-surface-check.mjs: static acceptance check for wallet-connected trader, LP, solver, keeper, and settlement actions, including calldata selector drift checks
-ops/mainnet-oracle-preflight.mjs: read-only Ethereum mainnet pool-fact check for the guarded USDC/USDT/DAI median oracle config
-ops/local-live-smoke.mjs: fresh-Anvil deploy/trader/LP/solver smoke test, including optional negative readiness probes
-ops/mvp-acceptance.mjs: local/live acceptance gate for trader, LP, solver, and decentralized-liveness requirements
-ops/solver-model-spread.mjs: reference external solver model for price-edge and fill-size decisions
-ops/solver-improvement-report.mjs: public event-log attribution for solver fills versus ETH LP vault backstop fills
-ops/readiness-check.mjs: live manifest/RPC readiness gate for trader markets, LP vault, solver auctions, keepers, settlement wiring, and decentralized liveness
-ops/economic-stress-check.py: historical RLP/N-side stress gate for roll cost, capacity, and paired Boosted demand assumptions
-ops/capacity-policy.py: ETH-denominated launch cap gate from committed LP-vault capital, Boosted/solver demand, or explicit no-solver launch mode
-ops/vault-strategy-plan.mjs: deterministic ETH LP vault action plan for solver-first, vault-backstop, pause, shrink, or liquidity-required decisions
+Traders use ETH by default.
+LPs deposit ETH, not a hidden stablecoin balance sheet.
+LP returns are market-making PnL with risk, not promised yield.
+External solvers can bid into public roll auctions.
+The ETH LP vault can bootstrap small launch caps without external solvers.
+Normal rolls target <= 10 bps by default.
+If cheap rolls fail, capacity pauses or shrinks instead of hiding high costs.
+Settlement uses a median of USDC, USDT, and DAI Uniswap TWAP sources.
+No trusted manual settlement, exclusive market maker, or centralized roll path is required.
 ```
 
-Independent operators can inspect public roll state and get suggested keeper or
-solver commands with:
+## Team Handoff
 
-```bash
-node ops/keeper-decisions.mjs --manifest demo/contract-manifest.json --rpc <RPC_URL>
+Start here if you are joining the project:
+
+```text
+TEAM_HANDOFF.md      product mental model, invariants, and next workstreams
+contracts_mvp.md     contract behavior and test coverage
+deployment_mvp.md    local and guarded Ethereum pilot deployment
+solver_market.md     solver onboarding and fill attribution
+SECURITY.md          current security posture and non-production caveats
+CONTRIBUTING.md      PR expectations
 ```
 
-The same helper now prioritizes direct LP inventory cleanup before looking for a
-market buyer: matched P+N balances merge back to ETH, settled P/N balances redeem
-to ETH, and only residual unpaired inventory uses optional public AMMs from
-`inventoryMarkets`. It also discovers active auctions directly from known wrapper
-sellers, reads the immutable global and per-seller active-auction ceilings, and
-marks new wrapper roll starts as not ready when the public auction board or
-wrapper seller quota is full. The companion runner turns those public-state
-decisions into a dry-run or
-operator-selected execution loop:
+## Builder Map
 
-For roll auctions, `keeper-decisions` also attaches a vault strategy plan and
-blocks LP backstop suggestions by default when the current roll would breach
-the low-cost band or lacks enough managed ETH vault capital. Pass
-`--strategy-no-solver-launch` for a deliberately small bootstrap, or pass
-committed `--strategy-boosted-demand-eth` and `--strategy-solver-float-eth` for
-scale mode.
+The repo has four main product surfaces:
 
-```bash
-# Solver role: compete for roll auctions.
-node ops/keeper-runner.mjs \
-  --rpc <RPC_URL> \
-  --action solver \
-  --recipient <ADDRESS> \
-  --solver-model ops/solver-model-spread.mjs
+```text
+Trader liquidity:
+  EthTokenAMM markets for Steady ETH / ETH and Boosted ETH / ETH
 
-# Solver attribution: measure external fill before the ETH LP vault.
-node ops/solver-improvement-report.mjs \
-  --rpc <RPC_URL> \
-  --auction-id <AUCTION_ID>
+User-facing exposure:
+  SeriesExposureVault wrappers for continuous Steady and Boosted shares
 
-# Wrapper keeper role: start/finalize/reset/cancel validated wrapper rolls.
-node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper
+Roll liquidity:
+  RollAuction public Dutch auctions plus RollSolver helper
 
-# ETH LP vault role: backstop rolls or clean up tracked inventory.
-node ops/keeper-runner.mjs \
-  --rpc <RPC_URL> \
-  --action lp \
-  --strategy-no-solver-launch
+Bootstrap liquidity:
+  EthLPVault plus EthLPVaultKeeper
 ```
 
-Add `--execute` only after reviewing the dry-run output and setting the key for
-that role: `SOLVER_PRIVATE_KEY`, `WRAPPER_KEEPER_PRIVATE_KEY`, or
-`LP_KEEPER_PRIVATE_KEY`. `PRIVATE_KEY` remains a local-test fallback, and
-`--private-key-env <NAME>` can override all role keys. The runner requires an
-explicit `--action` in execute mode, so operators choose their role instead of
-blindly running every possible action.
+Settlement uses:
 
-For a local live demo on Anvil, deploy direct components, export the registry
-manifest, and seed markets with one helper:
+```text
+MedianStableTwapSettlementOracle over USDC, USDT, and DAI Uniswap v3 TWAPs
+EthereumMainnetOracleConfig for guarded Ethereum mainnet pool configuration
+MockSettlementOracle for local deterministic tests
+```
+
+Operator and verification scripts:
+
+```text
+ops/mvp-acceptance.mjs             full local/live acceptance gate
+ops/readiness-check.mjs            live manifest readiness gate
+ops/local-live-smoke.mjs           fresh Anvil trader/LP/solver/keeper proof
+ops/keeper-decisions.mjs           public-state operator suggestions
+ops/keeper-runner.mjs              optional role-scoped execution runner
+ops/solver-improvement-report.mjs  public solver-vault fill attribution
+ops/vault-strategy-plan.mjs        deterministic LP vault action planner
+ops/capacity-policy.py             ETH-denominated launch cap gate
+ops/economic-stress-check.py       historical low-cost roll stress gate
+ops/mainnet-oracle-preflight.mjs   Ethereum mainnet oracle pool preflight
+```
+
+## Local Deployment
+
+For a local live demo on Anvil, deploy direct components, export the manifest,
+and seed markets with:
 
 ```bash
 PRIVATE_KEY=<PRIVATE_KEY> node ops/deploy-local-demo.mjs \
   --rpc http://127.0.0.1:8545
 ```
 
-Then check whether the deployment is actually runnable:
+Then check whether the deployment is runnable:
 
 ```bash
 node ops/readiness-check.mjs \
@@ -268,39 +204,7 @@ node ops/readiness-check.mjs \
   --capacity-strict
 ```
 
-On Ethereum mainnet, readiness also verifies that both series use the same
-median settlement oracle, that each series uses at least a 72-hour settlement
-TWAP window by default, and that the oracle exposes the guarded USDC, USDT, and
-DAI Uniswap v3 source pool configuration.
-Readiness expects the roll auction guardian to be `address(0)` by default, so
-admin circuit breakers are permanently disabled; use `--allow-auction-guardian`
-only for a deliberately guarded pilot.
-
-Before raising Steady capacity, run the historical economic stress gate:
-
-```bash
-python3 ops/economic-stress-check.py --end 2026-06-01
-python3 ops/economic-stress-check.py --end 2026-06-01 --rlp-capital-ratio 10 --n-external-fill 0.95
-```
-
-The default gate targets a weighted roll cost of at most 10 bps. Under the
-current conservative historical assumptions, the 2018-01-01 to 2026-06-01
-window clears at 8.6 bps with a 10x ETH LP capital ratio and 95% external
-N-side fill.
-
-Then turn the committed liquidity into an ETH-denominated Steady cap:
-
-```bash
-python3 ops/capacity-policy.py \
-  --end 2026-06-01 \
-  --lp-vault-eth 1000 \
-  --boosted-demand-eth 5000 \
-  --target-steady-eth 100 \
-  --strict
-```
-
-For a small Hyperliquid-style bootstrap with no committed external solvers yet,
-gate capacity by the ETH LP vault alone and keep the cap small:
+For a small no-solver launch, gate capacity by the ETH LP vault alone:
 
 ```bash
 python3 ops/capacity-policy.py \
@@ -314,8 +218,8 @@ python3 ops/capacity-policy.py \
   --strict
 ```
 
-Before a roll, turn the current quote, solver interest, and LP vault capital
-into an explicit vault strategy action:
+Before a roll, turn current liquidity and roll cost into an explicit vault
+strategy action:
 
 ```bash
 node ops/vault-strategy-plan.mjs \
@@ -331,12 +235,77 @@ The planner returns one of the product actions: clear with solvers, wait for
 solvers then vault-backstop, vault-only bootstrap, pause rolls, shrink capacity,
 or require more solver/Boosted liquidity.
 
-See `contracts_mvp.md` for the current contract surface and next build steps.
-See `deployment_mvp.md` for local and guarded Ethereum pilot deployment topology.
+## Operator Roles
 
-## Caveats
+Independent operators can inspect public roll state:
 
-This is not a production pricing model. It uses Black-Scholes put pricing only
-as a rough market-price proxy for `P_K`; the post explicitly warns against
-depending on a volatility oracle. The purpose here is to compare rebalancing
-rules, slippage sensitivity, and rough viability.
+```bash
+node ops/keeper-decisions.mjs \
+  --manifest demo/contract-manifest.json \
+  --rpc <RPC_URL>
+```
+
+Role-scoped runners can then act after reviewing the dry-run output:
+
+```bash
+# Solver role: compete for roll auctions.
+node ops/keeper-runner.mjs \
+  --rpc <RPC_URL> \
+  --action solver \
+  --recipient <ADDRESS> \
+  --solver-model ops/solver-model-spread.mjs
+
+# Wrapper keeper role: start/finalize/reset/cancel validated wrapper rolls.
+node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper
+
+# ETH LP vault role: backstop rolls or clean up tracked inventory.
+node ops/keeper-runner.mjs \
+  --rpc <RPC_URL> \
+  --action lp \
+  --strategy-no-solver-launch
+```
+
+Add `--execute` only after setting the key for that role:
+
+```text
+SOLVER_PRIVATE_KEY
+WRAPPER_KEEPER_PRIVATE_KEY
+LP_KEEPER_PRIVATE_KEY
+```
+
+## Research Scripts
+
+The research scripts are still useful, but they are supporting tools now, not
+the product identity of the repo.
+
+```bash
+python3 sim.py --start 2018-01-01 --end 2026-06-01
+python3 roll_market.py --start 2018-01-01 --end 2026-06-01
+python3 n_side.py --start 2018-01-01 --end 2026-06-01
+python3 n_demand.py --start 2018-01-01 --end 2026-06-01
+python3 rlp_sim.py --start 2018-01-01 --end 2026-06-01
+python3 rlp_risk.py --start 2018-01-01 --end 2026-06-01
+python3 user_bands.py --start 2018-01-01 --end 2026-06-01 --cost-bps 10
+python3 standardization.py --start 2018-01-01 --end 2026-06-01 --cost-bps 10
+python3 twap_caps.py --depth-1pct 10000000 --target-bps 50,100,500
+```
+
+The scripts use historical data and simplified pricing assumptions to explore
+capacity, roll cost, and liquidity sensitivity. They are not a production
+pricing oracle.
+
+## Current Status
+
+This is a research MVP and is not ready for public funds.
+
+Known gaps before real value:
+
+```text
+external security audit
+production deployment manifest proven by live readiness
+real solver commitments or liquidity SLAs
+production wallet/frontend hardening
+incident response and bug bounty process
+```
+
+Do not weaken these caveats until the evidence exists.
