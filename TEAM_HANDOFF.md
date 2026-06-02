@@ -162,7 +162,9 @@ ops/capacity-policy.py          ETH-denominated capacity gate
    Prove the `--rpc` readiness path against a real deployed manifest, including
    oracle metadata, compatible first/second series metadata, pinned sellers,
    keeper policies, auction limits, and capacity checks. Before deploy, run the
-   mainnet oracle preflight against the intended Ethereum RPC.
+   mainnet oracle preflight against the intended Ethereum RPC. For staging or
+   pilot readiness, pass `--require-median-oracle` so mock/manual settlement
+   cannot pass.
 
 2. Vault strategy
 

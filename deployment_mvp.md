@@ -492,6 +492,9 @@ gate: both live series must share one oracle, each series must use at least a
 and those sources must match the bounded USDC, USDT, and DAI Uniswap v3 median
 config. Local mock-oracle deployments are still accepted off mainnet.
 
+For staging or pilot checks on any chain, add `--require-median-oracle` to make
+readiness reject mock/manual settlement even off mainnet.
+
 Before raising Steady capacity, also run the historical economic stress gate:
 
 ```bash

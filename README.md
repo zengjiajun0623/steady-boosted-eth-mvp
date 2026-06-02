@@ -236,10 +236,14 @@ make cap misses blocking:
 node ops/readiness-check.mjs \
   --manifest demo/contract-manifest.json \
   --rpc <RPC_URL> \
+  --require-median-oracle \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250 \
   --capacity-strict
 ```
+
+Leave `--require-median-oracle` off for the local mock demo. Use it for staging
+or pilot readiness so mock/manual settlement cannot accidentally pass.
 
 For a small no-solver launch, gate capacity by the ETH LP vault alone:
 

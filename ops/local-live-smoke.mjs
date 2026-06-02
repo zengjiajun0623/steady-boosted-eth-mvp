@@ -309,9 +309,9 @@ async function writeTamperedManifest(tempDir, manifest, suffix, mutate) {
   return outputPath;
 }
 
-async function expectReadinessFailure({ name, manifestPath, rpcUrl, noSolverLaunch, expectedText }) {
+async function expectReadinessFailure({ name, manifestPath, rpcUrl, noSolverLaunch, expectedText, extraArgs = [] }) {
   try {
-    await run(process.execPath, strictReadinessArgs({ manifestPath, rpcUrl, noSolverLaunch }), {
+    await run(process.execPath, [...strictReadinessArgs({ manifestPath, rpcUrl, noSolverLaunch }), ...extraArgs], {
       timeoutMs: 180_000,
     });
   } catch (error) {
@@ -548,6 +548,16 @@ async function runLiveSmoke(args) {
         lpVault: premiumBackstop.lpVault,
         manifestPath: premiumBackstopManifestPath,
       });
+
+      await expectReadinessFailure({
+        name: "Local mock settlement manifest with required median oracle",
+        manifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+        expectedText: "settlement oracle exposes median source metadata",
+        extraArgs: ["--require-median-oracle"],
+      });
+      record("Readiness rejects mock settlement when median oracle is required", { manifestPath });
     }
 
     if (args.readinessOnly) {

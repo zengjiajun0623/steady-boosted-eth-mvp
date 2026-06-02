@@ -91,6 +91,8 @@ Options:
                              Maximum ETH LP vault premium bid over 1.0x (default: 0)
   --min-settlement-twap-hours <n>
                              Minimum series settlement TWAP window (default: 72)
+  --require-median-oracle    Fail unless settlement exposes a 3-source median oracle,
+                             even off mainnet. Keep this off for local mock demos.
   --boosted-demand-eth <eth> Credible committed Boosted/N buyer capacity beyond visible AMM ETH (default: 0)
   --solver-float-eth <eth>   External solver balance sheet for paired N inventory (default: 0)
   --capacity-rlp-ratio-bps <n>
@@ -124,6 +126,7 @@ function parseArgs(argv) {
     maxNormalRollCostBps: 10,
     maxLpRollPremiumBps: 0,
     minSettlementTwapSeconds: 72n * 60n * 60n,
+    requireMedianOracle: false,
     boostedDemandWei: 0n,
     solverFloatWei: 0n,
     capacityRlpRatioBps: 100_000,
@@ -172,6 +175,8 @@ function parseArgs(argv) {
       if (args.maxLpRollPremiumBps > 10_000) throw new Error("--max-lp-roll-premium-bps must be <= 10000");
     } else if (arg === "--min-settlement-twap-hours") {
       args.minSettlementTwapSeconds = BigInt(parsePositiveInteger(next(), arg)) * 60n * 60n;
+    } else if (arg === "--require-median-oracle") {
+      args.requireMedianOracle = true;
     } else if (arg === "--boosted-demand-eth") {
       args.boostedDemandWei = ethToWei(next());
     } else if (arg === "--solver-float-eth") {
@@ -1310,10 +1315,26 @@ function checkAuctionAndSeries(checks, manifest, health, args) {
   );
 }
 
-function checkSettlementOracles(checks, manifest, health, rpcChainId) {
+function medianOracleReady(manifest, health) {
+  const oracle = health.medianOracle;
+  if (!oracle?.supported || oracle.sourceCount !== 3n) return false;
+  if (!sameAddress(oracle.configuredFactory, manifest.contracts.factory)) return false;
+
+  return Object.entries(health.series).every(([key, series]) => {
+    const registration = oracle.seriesConfigs?.[key];
+    return (
+      registration?.registered &&
+      registration.maturity === series.maturity &&
+      registration.twapWindow === series.twapWindow
+    );
+  });
+}
+
+function checkSettlementOracles(checks, manifest, health, rpcChainId, args) {
   const firstOracle = health.series.first.oracle;
   const secondOracle = health.series.second.oracle;
   const mainnet = isMainnetChain(rpcChainId);
+  const medianRequired = mainnet || args.requireMedianOracle;
   const medianOracle = health.medianOracle;
   const medianMatches = medianOracleMatchesMainnetConfig(medianOracle);
 
@@ -1326,7 +1347,7 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId) {
     { firstOracle, secondOracle },
   );
 
-  if (!mainnet && !medianOracle?.supported) {
+  if (!medianRequired && !medianOracle?.supported) {
     addCheck(
       checks,
       "pass",
@@ -1340,13 +1361,15 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId) {
 
   addCheck(
     checks,
-    medianOracle?.supported ? "pass" : mainnet ? "fail" : "warn",
+    medianOracle?.supported ? "pass" : medianRequired ? "fail" : "warn",
     "risk",
     "settlement oracle exposes median source metadata",
     medianOracle?.supported
       ? `Oracle exposes ${medianOracle.sourceCount.toString()} source(s) and factory ${medianOracle.configuredFactory}.`
-      : `Oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`,
-    { oracle: firstOracle, medianOracle },
+      : args.requireMedianOracle
+        ? `Median oracle is required, but this oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`
+        : `Oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`,
+    { oracle: firstOracle, medianOracle, requireMedianOracle: args.requireMedianOracle },
   );
 
   if (!medianOracle?.supported) return;
@@ -1402,6 +1425,17 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId) {
         ? "Oracle source pools and conversion bounds match the bounded USDC, USDT, and DAI mainnet config."
         : "Oracle source pools or conversion bounds do not match the bounded mainnet median config.",
       { expectedPools: MAINNET_MEDIAN_ORACLE_POOLS, actualPools: medianOracle.poolConfigs },
+    );
+  } else if (args.requireMedianOracle) {
+    addCheck(
+      checks,
+      medianOracleReady(manifest, health) ? "pass" : "fail",
+      "risk",
+      "settlement oracle satisfies required median gate",
+      medianOracleReady(manifest, health)
+        ? "Non-mainnet readiness requires and found a registered 3-source median settlement oracle."
+        : "Median oracle is required, but source count, factory binding, or series registrations are incomplete.",
+      { medianOracle, requireMedianOracle: args.requireMedianOracle },
     );
   } else if (medianMatches) {
     addCheck(
@@ -1551,8 +1585,9 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
   const baseSettlementReady =
     Object.values(health.series).every((series) => isAddress(series.oracle)) &&
     sameAddress(health.series.first.oracle, health.series.second.oracle);
-  const settlementReady = isMainnetChain(rpcChainId)
-    ? baseSettlementReady && medianOracleMatchesMainnetConfig(health.medianOracle)
+  const medianRequired = isMainnetChain(rpcChainId) || args.requireMedianOracle;
+  const settlementReady = medianRequired
+    ? baseSettlementReady && medianOracleReady(manifest, health) && (!isMainnetChain(rpcChainId) || medianOracleMatchesMainnetConfig(health.medianOracle))
     : baseSettlementReady;
 
   addCheck(
@@ -1638,7 +1673,7 @@ async function main() {
     checkLpVault(checks, manifest, health, args);
     checkWrappers(checks, manifest, health, args);
     checkAuctionAndSeries(checks, manifest, health, args);
-    checkSettlementOracles(checks, manifest, health, rpcChainId);
+    checkSettlementOracles(checks, manifest, health, rpcChainId, args);
     checkCapacityPolicy(checks, health, args);
     checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args);
   }
