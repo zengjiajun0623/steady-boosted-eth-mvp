@@ -1103,6 +1103,7 @@ function buildLiquiditySizing(item, marketState, args, lpPolicy) {
     ? lpPolicy.maxActiveStrategyEth - lpPolicy.activeStrategyEth
     : 0n;
   let maxEth = lpPolicy.managedAssets < headroom ? lpPolicy.managedAssets : headroom;
+  if (lpPolicy.maxEthPerRoll < maxEth) maxEth = lpPolicy.maxEthPerRoll;
   if (maxEth === 0n) return { poolPriceWad, tokenAmount: 0n, ethAmount: 0n, minShares: 0n };
 
   let tokenAmount = capInventoryLiquidityAmount(item.balance, args);

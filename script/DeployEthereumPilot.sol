@@ -184,7 +184,8 @@ contract DeployEthereumPilot {
             config.minAuctionDuration,
             config.minLpBackstopDelay,
             config.minLpAuctionTimeLeft,
-            config.maxLpAuctionPriceDropBps
+            config.maxLpAuctionPriceDropBps,
+            uint16(config.ammFeeBps)
         );
         stored.lpKeeper.setVault(stored.lpVault);
 

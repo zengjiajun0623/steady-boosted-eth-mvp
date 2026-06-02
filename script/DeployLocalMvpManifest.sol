@@ -85,7 +85,8 @@ contract DeployLocalMvpManifest {
             12 hours,
             4 hours,
             6 hours,
-            MAX_NORMAL_ROLL_COST_BPS
+            MAX_NORMAL_ROLL_COST_BPS,
+            30
         );
         lpKeeper.setVault(lpVault);
     }

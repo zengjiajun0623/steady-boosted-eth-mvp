@@ -10,8 +10,8 @@
     <main class="shell">
       <header class="app-header">
         <div>
-          <p class="eyebrow">ETH roll vault demo</p>
-          <h1 id="appTitle">Steady ETH</h1>
+          <p class="eyebrow">Protocol ETH liquidity vault demo</p>
+          <h1 id="appTitle">Steady / Boosted ETH</h1>
         </div>
         <nav class="audience-tabs" aria-label="Audience">
           <button class="audience-tab is-active" data-page="trader" type="button">Trade</button>
@@ -37,7 +37,7 @@
             <div class="ticket-head">
               <div>
                 <h2>Trade</h2>
-                <p>Buy or sell.</p>
+                <p>Trade with the protocol vault.</p>
               </div>
             </div>
 
@@ -99,9 +99,9 @@
                 <small id="quoteReceiveAsset">Steady ETH</small>
               </div>
               <div class="fee-card">
-                <span>Spread</span>
+                <span>Vault fee</span>
                 <strong id="quoteFee">0 bps</strong>
-                <small>Demo quote</small>
+                <small>Live quote</small>
               </div>
             </div>
 
@@ -128,7 +128,7 @@
               </div>
 
               <p class="quote-note" id="quoteNote">
-                Auto-rolls before maturity. Final settlement uses a 3-stable ETH TWAP median.
+                The protocol vault fills trader orders and manages rolls behind the scenes. Final settlement uses a 3-stable ETH TWAP median.
               </p>
 
               <details class="series-panel">
@@ -763,7 +763,7 @@
           <details>
             <summary>What does the vault do?</summary>
             <p>
-              LPs deposit ETH into the protocol liquidity engine. The vault helps rolls clear and earns spread when it fills demand.
+              LPs deposit ETH into the protocol liquidity engine. The vault makes Steady ETH and Boosted ETH tradeable, and it earns trading fees plus roll and inventory PnL.
             </p>
           </details>
 

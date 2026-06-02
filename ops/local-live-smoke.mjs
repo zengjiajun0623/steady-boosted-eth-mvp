@@ -47,8 +47,8 @@ Options:
 
 This starts a fresh Anvil chain, deploys the local MVP, funds the ETH LP vault,
 runs strict live readiness, uses separate trader/LP/solver/keeper accounts,
-buys/sells Steady and Boosted ETH, starts a public roll auction, then either
-fills it with an external solver plus the ETH LP vault or, with
+buys/sells Steady and Boosted ETH through the Protocol ETH Liquidity Vault,
+starts a public roll auction, then either fills it with an external solver plus the ETH LP vault or, with
 --no-solver-launch, lets the ETH LP vault clear the roll alone. It finalizes
 the Steady wrapper roll, settles the inventory, and verifies the LP vault earned
 a positive market-making return.`;
@@ -388,6 +388,7 @@ async function deployPremiumLpBackstop(rpcUrl, privateKey, steadyRollSeller, boo
     String(4 * 60 * 60),
     String(6 * 60 * 60),
     "10",
+    "30",
   ], { timeoutMs: 300_000 });
   const lpVault = parseDeployedAddress(vaultOutput);
 
@@ -401,20 +402,40 @@ async function deployPremiumLpBackstop(rpcUrl, privateKey, steadyRollSeller, boo
   return { lpKeeper, lpVault };
 }
 
-async function exerciseMarket({ rpcUrl, privateKey, account, market, buyWei, sellFractionBps }) {
-  const token = parseAddress(await castCall(rpcUrl, market, "token()(address)"));
-  const before = await readTokenBalance(rpcUrl, token, account);
-  await castSend(rpcUrl, privateKey, market, "buyToken(uint256,address)", [0, account], { value: buyWei });
-  const afterBuy = await readTokenBalance(rpcUrl, token, account);
+async function exerciseVaultProductTrade({
+  rpcUrl,
+  privateKey,
+  account,
+  lpVault,
+  factory,
+  seriesId,
+  wrapper,
+  boosted,
+  buyWei,
+  sellFractionBps,
+}) {
+  const share = parseAddress(await castCall(rpcUrl, wrapper, "share()(address)"));
+  const buySignature = boosted
+    ? "buyBoosted(address,bytes32,address,uint256,address)"
+    : "buySteady(address,bytes32,address,uint256,address)";
+  const sellSignature = boosted
+    ? "sellBoosted(address,bytes32,address,uint256,uint256,address)"
+    : "sellSteady(address,bytes32,address,uint256,uint256,address)";
+
+  const before = await readTokenBalance(rpcUrl, share, account);
+  await castSend(rpcUrl, privateKey, lpVault, buySignature, [factory, seriesId, wrapper, 0, account], {
+    value: buyWei,
+  });
+  const afterBuy = await readTokenBalance(rpcUrl, share, account);
   const acquired = afterBuy - before;
-  if (acquired <= 0n) throw new Error(`Market ${market} buy returned no product tokens`);
+  if (acquired <= 0n) throw new Error(`Vault-backed ${boosted ? "Boosted" : "Steady"} buy returned no shares`);
 
   const sellAmount = (acquired * BigInt(sellFractionBps)) / 10_000n;
-  if (sellAmount <= 0n) throw new Error(`Market ${market} sell amount rounded to zero`);
-  await castSend(rpcUrl, privateKey, token, "approve(address,uint256)", [market, sellAmount]);
-  await castSend(rpcUrl, privateKey, market, "sellToken(uint256,uint256,address)", [sellAmount, 0, account]);
+  if (sellAmount <= 0n) throw new Error(`Vault-backed ${boosted ? "Boosted" : "Steady"} sell amount rounded to zero`);
+  await castSend(rpcUrl, privateKey, share, "approve(address,uint256)", [lpVault, sellAmount]);
+  await castSend(rpcUrl, privateKey, lpVault, sellSignature, [factory, seriesId, wrapper, sellAmount, 0, account]);
 
-  return { market, token, acquired: acquired.toString(), sold: sellAmount.toString() };
+  return { lpVault, wrapper, share, acquired: acquired.toString(), sold: sellAmount.toString() };
 }
 
 async function runLiveSmoke(args) {
@@ -616,25 +637,33 @@ async function runLiveSmoke(args) {
       };
     }
 
-    const steadyTrade = await exerciseMarket({
+    const steadyTrade = await exerciseVaultProductTrade({
       rpcUrl,
       privateKey: args.traderPrivateKey,
       account: roles.trader,
-      market: contracts.steadyMarket,
+      lpVault: contracts.lpVault,
+      factory: contracts.factory,
+      seriesId: series.firstSeriesId,
+      wrapper: contracts.steadyVault,
+      boosted: false,
       buyWei: wei("0.1"),
-      sellFractionBps: 5_000,
+      sellFractionBps: 10_000,
     });
-    record("Trader bought and sold Steady ETH", steadyTrade);
+    record("Trader bought and sold Steady ETH through protocol vault", steadyTrade);
 
-    const boostedTrade = await exerciseMarket({
+    const boostedTrade = await exerciseVaultProductTrade({
       rpcUrl,
       privateKey: args.traderPrivateKey,
       account: roles.trader,
-      market: contracts.boostedMarket,
+      lpVault: contracts.lpVault,
+      factory: contracts.factory,
+      seriesId: series.firstSeriesId,
+      wrapper: contracts.boostedVault,
+      boosted: true,
       buyWei: wei("0.05"),
       sellFractionBps: 10_000,
     });
-    record("Trader bought and sold Boosted ETH", boostedTrade);
+    record("Trader bought and sold Boosted ETH through protocol vault", boostedTrade);
 
     const auctionId = parseUint(await castCall(rpcUrl, contracts.rollAuction, "auctionCount()(uint256)"));
     await runKeeperRunner({
@@ -761,7 +790,7 @@ async function runLiveSmoke(args) {
     await runKeeperRunner({
       rpcUrl,
       manifestPath,
-      action: "wrapper",
+      action: "wrapper-finalize-roll",
       env: { WRAPPER_KEEPER_PRIVATE_KEY: args.keeperPrivateKey },
     });
     const currentSeries = (await castCall(rpcUrl, contracts.steadyKeeper, "currentSeriesId()(bytes32)")).trim();

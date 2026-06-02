@@ -198,7 +198,7 @@ The repo has four main product surfaces:
 
 ```text
 Trader liquidity:
-  EthTokenAMM markets for Steady ETH / ETH and Boosted ETH / ETH
+  EthLPVault quotes and fills Steady ETH / ETH and Boosted ETH / ETH trades
 
 User-facing exposure:
   SeriesExposureVault wrappers for continuous Steady and Boosted shares
@@ -206,8 +206,8 @@ User-facing exposure:
 Roll liquidity:
   RollAuction public Dutch auctions plus RollSolver helper
 
-Bootstrap liquidity:
-  EthLPVault plus EthLPVaultKeeper
+Protocol liquidity:
+  EthLPVault plus EthLPVaultKeeper for trader fills, roll backstops, and inventory cleanup
 ```
 
 Settlement uses:

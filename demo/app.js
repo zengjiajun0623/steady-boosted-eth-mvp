@@ -13,6 +13,12 @@ const SELECTORS = {
   buyToken: "0x9134709e",
   sellToken: "0x88036ac5",
   ammToken: "0xfc0c546a",
+  buySteady: "0xa01473b7",
+  buyBoosted: "0x16a76757",
+  sellSteady: "0x545adb0a",
+  sellBoosted: "0x2c38d5a0",
+  quoteBuyProduct: "0x7bcea1f9",
+  quoteSellProduct: "0x4994d34b",
   deposit: "0xd0e30db0",
   approve: "0x095ea7b3",
   quoteBuyToken: "0xdef151a1",
@@ -524,9 +530,11 @@ function wrapperConfig(key) {
 
 function hasDeployManifest() {
   return Boolean(
-    isAddress(contractAddress("steadyMarket")) &&
-      isAddress(contractAddress("boostedMarket")) &&
+    isAddress(contractAddress("factory")) &&
       isAddress(contractAddress("lpVault")) &&
+      isAddress(contractAddress("steadyVault")) &&
+      isAddress(contractAddress("boostedVault")) &&
+      isBytes32(state.contracts.manifest?.series?.firstSeriesId) &&
       isAddress(seriesAddress("firstP")) &&
       isAddress(seriesAddress("firstN")),
   );
@@ -581,8 +589,16 @@ function activeMarketAddress() {
   return contractAddress(state.strategy === "boosted" ? "boostedMarket" : "steadyMarket");
 }
 
+function activeWrapperAddress() {
+  return productWrapperAddress(state.strategy);
+}
+
 function activeTokenAddress() {
   return productTokenAddress(state.strategy);
+}
+
+function productWrapperAddress(key) {
+  return contractAddress(key === "boosted" ? "boostedVault" : "steadyVault");
 }
 
 function productMarketAddress(key) {
@@ -597,6 +613,12 @@ function fallbackProductTokenAddress(key) {
 
 function productTokenAddress(key) {
   return state.onchain.marketTokens[key] || fallbackProductTokenAddress(key);
+}
+
+function productSeriesId(key) {
+  const wrapperSeries = state.onchain.wrapperRolls[key]?.currentSeriesId;
+  if (isBytes32(wrapperSeries) && wrapperSeries !== ZERO_BYTES32) return wrapperSeries;
+  return state.contracts.manifest?.series?.firstSeriesId || null;
 }
 
 function activeLiveAuction() {
@@ -696,6 +718,14 @@ function encodeBuyToken(minTokenOut, recipient) {
 
 function encodeSellToken(tokenIn, minEthOut, recipient) {
   return `${SELECTORS.sellToken}${word(tokenIn)}${word(minEthOut)}${addressWord(recipient)}`;
+}
+
+function encodeBuyProduct(selector, factory, seriesId, wrapper, minSharesOut, recipient) {
+  return `${selector}${addressWord(factory)}${bytes32Word(seriesId)}${addressWord(wrapper)}${word(minSharesOut)}${addressWord(recipient)}`;
+}
+
+function encodeSellProduct(selector, factory, seriesId, wrapper, sharesIn, minEthOut, recipient) {
+  return `${selector}${addressWord(factory)}${bytes32Word(seriesId)}${addressWord(wrapper)}${word(sharesIn)}${word(minEthOut)}${addressWord(recipient)}`;
 }
 
 function encodeApprove(spender, amount) {
@@ -820,35 +850,57 @@ async function readMarketTokenAddress(key) {
   }
 }
 
+async function readProductShareAddress(key) {
+  const manifestShare = seriesAddress(key === "boosted" ? "boostedShare" : "steadyShare");
+  if (isAddress(manifestShare)) return manifestShare;
+
+  const wrapper = productWrapperAddress(key);
+  if (!isAddress(wrapper)) return fallbackProductTokenAddress(key);
+
+  try {
+    const raw = await ethCall(wrapper, SELECTORS.vaultShare);
+    const share = decodeAddress(raw);
+    return isAddress(share) ? share : fallbackProductTokenAddress(key);
+  } catch (error) {
+    console.warn(`Could not read ${key} wrapper share`, error);
+    return fallbackProductTokenAddress(key);
+  }
+}
+
 function tradeQuoteKey() {
   if (!onchainReady()) return null;
-  const market = activeMarketAddress();
-  if (!isAddress(market)) return null;
+  const lpVault = contractAddress("lpVault");
+  const wrapper = activeWrapperAddress();
+  const seriesId = productSeriesId(state.strategy);
+  if (!isAddress(lpVault) || !isAddress(wrapper) || !isBytes32(seriesId)) return null;
   return [
     state.contracts.account,
-    market,
+    lpVault,
+    wrapper,
+    seriesId,
     state.tradeSide,
     decimalToWei(Number(els.deposit.value)).toString(),
   ].join(":");
 }
 
 async function readActiveTradeQuote() {
-  const market = activeMarketAddress();
+  const lpVault = contractAddress("lpVault");
+  const wrapper = activeWrapperAddress();
   const key = tradeQuoteKey();
-  if (!key || !isAddress(market)) return null;
+  if (!key || !isAddress(lpVault) || !isAddress(wrapper)) return null;
 
   const amount = decimalToWei(Number(els.deposit.value));
   if (amount === 0n) return null;
-  const selector = state.tradeSide === "buy" ? SELECTORS.quoteBuyToken : SELECTORS.quoteSellToken;
-  const raw = await ethCall(market, encodeUintCall(selector, amount));
+  const selector = state.tradeSide === "buy" ? SELECTORS.quoteBuyProduct : SELECTORS.quoteSellProduct;
+  const raw = await ethCall(lpVault, `${selector}${addressWord(wrapper)}${word(amount)}`);
   return { key, outputEth: weiToEth(decodeUint(raw)), updatedAt: Date.now() };
 }
 
 async function readAccountBalances(account) {
   const [ethRaw, steadyToken, boostedToken] = await Promise.all([
     callRpc("eth_getBalance", [account, "latest"]),
-    readMarketTokenAddress("steady"),
-    readMarketTokenAddress("boosted"),
+    readProductShareAddress("steady"),
+    readProductShareAddress("boosted"),
   ]);
   const [steady, boosted] = await Promise.all([
     readTokenBalance(steadyToken, account),
@@ -1159,6 +1211,22 @@ function decodeMarketHealth(raw) {
   };
 }
 
+function emptyMarketHealth(market = null) {
+  return {
+    market,
+    token: null,
+    lpToken: null,
+    feeBps: 0,
+    ethReserve: 0,
+    tokenReserve: 0,
+    sampleEthIn: 0,
+    sampleBuyTokenOut: 0,
+    sampleTokenIn: 0,
+    sampleSellEthOut: 0,
+    hasLiquidity: false,
+  };
+}
+
 function decodeLpVaultHealth(raw) {
   const hasSalePolicy = hasWords(raw, 21);
   const hasMarketCounters = hasWords(raw, 23);
@@ -1283,10 +1351,17 @@ async function readProtocolHealthState() {
       ? ethCall(lens, encodeAuctionHealth(rollAuction, auctionId)).then(decodeAuctionHealth)
       : Promise.resolve(null);
 
+  const steadyMarketJob = isAddress(addresses.steadyMarket)
+    ? ethCall(lens, encodeMarketHealth(addresses.steadyMarket, sample, sample)).then(decodeMarketHealth)
+    : Promise.resolve(emptyMarketHealth(addresses.steadyMarket));
+  const boostedMarketJob = isAddress(addresses.boostedMarket)
+    ? ethCall(lens, encodeMarketHealth(addresses.boostedMarket, sample, sample)).then(decodeMarketHealth)
+    : Promise.resolve(emptyMarketHealth(addresses.boostedMarket));
+
   const [steadyMarket, boostedMarket, lpVault, steadyWrapper, boostedWrapper, firstSeries, auction] =
     await Promise.all([
-      ethCall(lens, encodeMarketHealth(addresses.steadyMarket, sample, sample)).then(decodeMarketHealth),
-      ethCall(lens, encodeMarketHealth(addresses.boostedMarket, sample, sample)).then(decodeMarketHealth),
+      steadyMarketJob,
+      boostedMarketJob,
       ethCall(lens, encodeAddressCall(SELECTORS.healthLpVault, addresses.lpVault)).then(decodeLpVaultHealth),
       ethCall(lens, encodeAddressCall(SELECTORS.healthWrapper, addresses.steadyVault)).then(decodeWrapperHealth),
       ethCall(lens, encodeAddressCall(SELECTORS.healthWrapper, addresses.boostedVault)).then(decodeWrapperHealth),
@@ -1802,8 +1877,8 @@ function rollStatusText(rollBps) {
 }
 
 function routeText(productLabel, isBuy) {
-  if (isBuy) return `ETH → ${productLabel}`;
-  return `${productLabel} → ETH`;
+  if (isBuy) return `ETH → Protocol vault → ${productLabel}`;
+  return `${productLabel} → Protocol vault → ETH`;
 }
 
 function managedSeriesDetails() {
@@ -1824,7 +1899,18 @@ function clampTradeAmount() {
 }
 
 function maxTradeEth() {
-  return Math.max(0, Math.floor((availableBalance() / latestSpot()) * 100) / 100);
+  const walletMax = Math.max(0, availableBalance() / latestSpot());
+  const vaultMax = vaultTradeCapacityEth();
+  return Math.max(0, Math.floor(Math.min(walletMax, vaultMax) * 100) / 100);
+}
+
+function vaultTradeCapacityEth() {
+  if (!onchainReady()) return 12.5;
+  const vault = state.onchain.health?.lpVault;
+  if (!vault) return 0;
+  const headroom = Math.max(0, vault.maxActiveStrategyEth - vault.activeStrategyEth);
+  const managed = Math.max(0, vault.managedEth || 0);
+  return Math.max(0, Math.min(vault.maxEthPerRoll || 0, headroom, managed));
 }
 
 function clampRangeValue(input, target) {
@@ -1883,7 +1969,9 @@ function updateTradeTicket() {
   const isBuy = state.tradeSide === "buy";
   const available = availableBalance();
   const chainBlocked = walletChainMismatch();
-  const canTrade = quote.amount > 0 && quote.amount <= available && !chainBlocked;
+  const vaultCapacityEth = vaultTradeCapacityEth();
+  const capacityBlocked = onchainReady() && vaultCapacityEth <= 0;
+  const canTrade = quote.amount > 0 && quote.amount <= available && !chainBlocked && !capacityBlocked;
   const liquidity = liquidityMetrics();
 
   document.body.dataset.side = state.tradeSide;
@@ -1892,7 +1980,7 @@ function updateTradeTicket() {
   els.walletLabel.textContent = isBuy ? "Available ETH" : `Available ${productLabel}`;
   els.walletBalance.textContent = walletBalanceText(available);
   els.rollStatus.textContent = rollStatusText(liquidity.rollBps);
-  els.tradeCapacity.textContent = ethValueText(liquidity.startingCap);
+  els.tradeCapacity.textContent = onchainReady() ? ethAmountText(vaultCapacityEth) : ethValueText(liquidity.startingCap);
   els.quotePayLabel.textContent = isBuy ? "You pay" : "You sell";
   els.quotePay.textContent = isBuy ? ethValueText(quote.amount) : productValueText(quote.amount, productLabel);
   els.quotePayAsset.textContent = usdApproxText(quote.amount);
@@ -1902,8 +1990,8 @@ function updateTradeTicket() {
   els.quoteFee.textContent = `${quote.bps} bps`;
   els.routeText.textContent = routeText(productLabel, isBuy);
   els.quoteNote.textContent = isBuy
-    ? "Auto-rolls before maturity. Final settlement uses a 3-stable ETH TWAP median."
-    : "This is a market sell. Protocol redemption settles back to ETH.";
+    ? "The Protocol ETH Liquidity Vault fills this trade and manages the roll behind the scenes. Final settlement uses a 3-stable ETH TWAP median."
+    : "The Protocol ETH Liquidity Vault buys your shares back for ETH, minus the trade fee.";
   const series = managedSeriesDetails();
   els.seriesSummary.textContent = "Rolling vault share";
   els.seriesStrike.textContent = money(series.strike);
@@ -1913,15 +2001,15 @@ function updateTradeTicket() {
   els.tradeAction.disabled = !canTrade;
   if (chainBlocked) {
     els.tradeStatus.textContent = chainMismatchText();
+  } else if (capacityBlocked) {
+    els.tradeStatus.textContent = "Vault trading capacity is full. Wait for inventory cleanup or more LP ETH.";
   } else if (!canTrade) {
     const neededAsset = isBuy ? "ETH" : productLabel;
     els.tradeStatus.textContent = `Not enough ${neededAsset} for this trade.`;
   } else if (onchainReady() && quote.source !== "live") {
-    els.tradeStatus.textContent = "Refreshing live AMM quote...";
+    els.tradeStatus.textContent = "Refreshing live vault quote...";
   } else if (onchainReady()) {
-    els.tradeStatus.textContent = isBuy
-      ? "Ready to send an AMM buy transaction."
-      : "Ready to approve and sell through the AMM.";
+    els.tradeStatus.textContent = "Ready to trade with the Protocol ETH Liquidity Vault.";
   } else if (hasDeployManifest()) {
     els.tradeStatus.textContent = "Connect wallet to trade against deployed contracts.";
   } else {
@@ -2633,44 +2721,49 @@ function drawLpChart(values) {
 }
 
 async function submitOnchainTrade() {
-  const market = activeMarketAddress();
+  const lpVault = contractAddress("lpVault");
+  const factory = contractAddress("factory");
+  const wrapper = activeWrapperAddress();
+  const seriesId = productSeriesId(state.strategy);
   const account = state.contracts.account;
   const productLabel = activeProductLabelText();
-  if (!isAddress(market) || !account) return;
+  if (!isAddress(lpVault) || !isAddress(factory) || !isAddress(wrapper) || !isBytes32(seriesId) || !account) return;
 
   els.tradeAction.disabled = true;
   try {
     await refreshOnchainReads({ includeQuote: true, renderAfter: false });
     const quote = currentQuote();
     if (quote.source !== "live") {
-      els.tradeStatus.textContent = "Could not read a live AMM quote. Check pool liquidity.";
+      els.tradeStatus.textContent = "Could not read a live vault quote. Check vault capacity.";
       return;
     }
 
     if (state.tradeSide === "buy") {
-      const minTokenOut = decimalToWei(quote.receiveEth * 0.995);
+      const selector = state.strategy === "boosted" ? SELECTORS.buyBoosted : SELECTORS.buySteady;
+      const minSharesOut = decimalToWei(quote.receiveEth * 0.995);
       const hash = await sendTransaction({
-        to: market,
+        to: lpVault,
         value: toHex(decimalToWei(quote.sizeEth)),
-        data: encodeBuyToken(minTokenOut, account),
+        data: encodeBuyProduct(selector, factory, seriesId, wrapper, minSharesOut, account),
       });
       els.tradeStatus.textContent = `Submitted buy transaction: ${shortAddress(hash)}.`;
     } else {
       const token = activeTokenAddress();
       if (!isAddress(token)) {
-        els.tradeStatus.textContent = "Could not find the deployed product token for this market.";
+        els.tradeStatus.textContent = "Could not find the deployed product share token.";
         return;
       }
+      const selector = state.strategy === "boosted" ? SELECTORS.sellBoosted : SELECTORS.sellSteady;
       const tokenIn = decimalToWei(quote.sizeEth);
       const minEthOut = decimalToWei(quote.receiveEth * 0.995);
       const approveHash = await sendTransaction({
         to: token,
-        data: encodeApprove(market, tokenIn),
+        data: encodeApprove(lpVault, tokenIn),
       });
       els.tradeStatus.textContent = `Approval submitted: ${shortAddress(approveHash)}. Confirm sell in wallet next.`;
       const sellHash = await sendTransaction({
-        to: market,
-        data: encodeSellToken(tokenIn, minEthOut, account),
+        to: lpVault,
+        data: encodeSellProduct(selector, factory, seriesId, wrapper, tokenIn, minEthOut, account),
       });
       els.tradeStatus.textContent = `Submitted sell transaction: ${shortAddress(sellHash)}.`;
     }

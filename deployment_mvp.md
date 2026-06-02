@@ -21,8 +21,8 @@ Steady wrapper keeper
 Boosted wrapper keeper
 Steady wrapper for first-series P, managed by its keeper
 Boosted wrapper for first-series N, managed by its keeper
-Steady ETH/share AMM
-Boosted ETH/share AMM
+Protocol ETH Liquidity Vault trader route
+optional Steady and Boosted wrapper-share AMMs for secondary liquidity
 Direct P/N inventory AMMs for first and second series
 ```
 
@@ -43,7 +43,7 @@ creation reverts instead of leaving a hidden manual-settlement rescue path.
 For local Anvil demos, use `ops/deploy-local-demo.mjs`. It wraps
 `DeployLocalMvpManifest`, broadcasts each component deployment directly with
 Foundry's `--slow` mode, exports `demo/contract-manifest.json`, and seeds the
-Steady/Boosted AMMs. This avoids the large initcode of deploying the all-in-one
+initial vault/wrapper/AMM demo liquidity. This avoids the large initcode of deploying the all-in-one
 topology holder as a normal contract.
 
 ```bash
@@ -255,14 +255,14 @@ boostedMarket
 lpVault
 firstP
 firstN
-steadyShare / boostedShare are optional; the app reads market.token() live
+steadyShare / boostedShare are optional; the app reads wrapper share() live
 ```
 
 Once a wallet is connected, the demo can submit:
 
 ```text
-ETH -> Steady/Boosted AMM buy transactions
-Steady/Boosted approval + sell transactions
+ETH -> Steady/Boosted buy transactions through the Protocol ETH Liquidity Vault
+Steady/Boosted approval + vault-backed sell transactions
 ETH LP vault deposit transactions
 ETH LP vault withdraw request + claim transactions
 ETH LP vault keeper bid/unwind transactions for roll inventory
@@ -276,8 +276,8 @@ With a connected wallet and manifest, the demo also reads:
 
 ```text
 ETH, Steady, and Boosted balances
-live AMM buy/sell quotes
-Steady/Boosted market token addresses from EthTokenAMM.token()
+live Protocol ETH Liquidity Vault buy/sell quotes
+Steady/Boosted wrapper share token addresses from share()
 ETH LP vault share value, managed assets, and active strategy state
 ETH LP vault max roll price, strategy capacity, solver-first delay, minimum
 auction time left, and maximum price-decay policy
@@ -447,7 +447,7 @@ node ops/mvp-acceptance.mjs --local-live
 
 That starts Anvil, deploys and seeds the MVP, funds separate trader/LP/solver/
 keeper accounts, deposits the ETH LP vault, runs strict readiness, exercises
-Steady/Boosted trader buy/sell transactions, then uses `ops/keeper-runner.mjs`
+vault-backed Steady/Boosted trader buy/sell transactions, then uses `ops/keeper-runner.mjs`
 to prove both launch paths: one public roll auction filled by `RollSolver` plus
 the ETH LP vault, and one no-solver roll cleared by the ETH LP vault alone. Both
 paths finalize the Steady wrapper roll, redeem and close LP inventory, and check
@@ -661,7 +661,8 @@ addresses to the manifest. The helper verifies each AMM's `token()` before
 suggesting `sellInventory(...)` or `addInventoryLiquidity(...)`, and it will not
 suggest an AMM sale or AMM-liquidity add below the vault's floor. If the vault
 already owns AMM LP shares, the helper suggests `removeInventoryLiquidity(...)`
-before strategy close.
+before strategy close. AMM-liquidity suggestions are also capped by the vault's
+`maxEthPerRoll` and remaining `maxActiveStrategyEth` headroom.
 below the ETH LP vault's immutable inventory-sale floor:
 
 ```json
@@ -722,10 +723,10 @@ pool-liquidity assumptions, and cap policy against current market depth.
 1. Seed option inventory by minting the first series from `EthOptionsFactory`.
 2. Deposit first-series `P` into `steadyVault` to mint Steady wrapper shares.
 3. Deposit first-series `N` into `boostedVault` to mint Boosted wrapper shares.
-4. Seed `steadyMarket` with Steady shares plus ETH.
-5. Seed `boostedMarket` with Boosted shares plus ETH.
+4. Fund the Protocol ETH Liquidity Vault with LP ETH.
+5. Optionally seed Steady/Boosted wrapper-share AMMs for secondary liquidity.
 6. Optionally seed direct P/N inventory AMMs for LP vault unwind liquidity.
-7. Users trade Steady/Boosted wrapper shares against ETH through the AMMs.
+7. Users trade Steady/Boosted wrapper shares against ETH through the Protocol ETH Liquidity Vault.
 8. Users can also wrap or unwrap current `P`/`N` directly through the wrappers.
 9. Near roll time, wrapper keepers start public `RollAuction` rolls for the
    full current wrapper balance into the second series.

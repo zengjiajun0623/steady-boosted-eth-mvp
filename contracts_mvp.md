@@ -48,6 +48,10 @@ claim withdraw -> receive ETH
 It can also act as a roll-market bidder:
 
 ```text
+trader sends ETH -> vault mints P/N with net ETH
+vault deposits P into Steady wrapper, or N into Boosted wrapper, for the trader
+vault keeps the paired P/N inventory and the ETH trade fee
+trader sells wrapper shares -> vault unwraps P/N and pays ETH minus fee
 vault uses ETH to mint the next P/N pair
 vault pays a Steady roll auction with new P, or a Boosted roll auction with new N
 vault receives old inventory plus leftover newly minted P/N inventory
@@ -63,6 +67,7 @@ immutable strategy policy:
 max ETH per roll
 max active strategy ETH
 max roll price paid
+product trade fee
 minimum ETH/token inventory sale price
 minimum auction duration
 ```
@@ -94,14 +99,15 @@ This reduces the number of cases where the LP vault needs a new counterparty. A
 counterparty is still needed for unpaired, unsettled inventory, but not for
 matched balances or settled balances. AMM liquidity provision requires an
 already-seeded matching market above the immutable sale floor, so the vault
-cannot create arbitrary bad-price pools with depositor ETH.
+cannot create arbitrary bad-price pools with depositor ETH. It is also capped by
+the same `maxEthPerRoll` per-action limit used by vault roll backstops.
 
-The LP vault earns when it backstops a roll at a favorable discount and the
-received inventory later merges, redeems, or sells for more ETH than the vault
-spent minting the payment side. This is market-making PnL, not guaranteed yield:
-bad fills, adverse settlement, or thin residual-inventory markets can reduce LP
-returns. The acceptance gate includes a discounted-roll smoke that resolves
-inventory and checks that managed ETH increases.
+The LP vault earns from direct trader fees plus roll/inventory PnL when the
+inventory it keeps later merges, redeems, or sells for more ETH than the vault
+spent. This is market-making PnL, not guaranteed yield: bad fills, adverse
+settlement, or thin residual-inventory markets can reduce LP returns. The
+acceptance gate includes a discounted-roll smoke that resolves inventory and
+checks that managed ETH increases.
 
 To keep LP accounting decentralized, the vault does not rely on an offchain
 mark-to-market price for open option inventory. Instead, new deposits and new
@@ -112,7 +118,10 @@ remain publicly visible without making future shutdowns loop over old history.
 
 ### `EthTokenAMM`
 
-The AMM gives traders a direct ETH market for each continuous product token:
+The AMM is now secondary liquidity, not the primary MVP trader route. The
+protocol vault can quote and fill ordinary Steady/Boosted trades directly. AMMs
+remain useful as simple public venues for wrapper-share liquidity and residual
+inventory testing:
 
 ```text
 buy Steady ETH: ETH -> Steady wrapper share
@@ -126,9 +135,9 @@ when the wrapper rolls its internal `P` or `N` inventory from one maturity to th
 next. This avoids rebuilding the trader market every time a series changes.
 
 `EthTokenAMM` is still a minimal constant-product pool with LP shares and
-slippage limits. This is enough for the MVP to prove the trader path without a
-centralized quote server. A production deployment should prefer deep external
-DEX pools or a more carefully audited AMM.
+slippage limits. This is enough for the MVP to test secondary liquidity without
+a centralized quote server. A production deployment can still add deep external
+DEX pools, but the simplest launch story is one Protocol ETH Liquidity Vault.
 
 `DeployLocalMvp.seedMarkets(...)` can bootstrap the first local product markets
 in one call:
@@ -634,6 +643,7 @@ ETH LP vault can sell tracked inventory through a matching public AMM
 ETH LP vault can provide tracked inventory plus ETH as matching public AMM liquidity
 ETH LP vault rejects inventory sales below its immutable sale floor
 ETH LP vault rejects AMM liquidity provision into unseeded or below-floor markets
+ETH LP vault rejects AMM liquidity provision above the per-action ETH limit
 ETH LP vault rejects inventory sales through mismatched AMMs
 permissionless keeper can execute allowed ETH LP vault bids
 permissionless keeper can sell tracked ETH LP vault inventory through public AMMs
@@ -651,13 +661,13 @@ wrapper keeper rejects roll auctions above its immutable product cap
 permissionless wrapper keeper rejects wrong-side vaults and out-of-policy rolls
 permissionless wrapper keeper only cancels unfilled rolls after auction duration
 permissionless wrapper keeper can reset expired partially filled rolls
-trader can buy and sell Steady wrapper shares against ETH
-trader can buy and sell Boosted wrapper shares against ETH
-deployer wires trader AMMs to wrapper shares instead of expiring first-series tokens
+trader can buy and sell Steady wrapper shares against ETH through the ETH LP vault
+trader can buy and sell Boosted wrapper shares against ETH through the ETH LP vault
+deployer can still wire secondary AMMs to wrapper shares instead of expiring first-series tokens
 Ethereum pilot deployer rejects non-mainnet deployment
 Ethereum pilot deployer rejects caps above the pilot limit
 deployers reject nonzero auction guardians
-Ethereum pilot deployer wires the TWAP oracle, product wrappers, and wrapper-share AMMs
+Ethereum pilot deployer wires the TWAP oracle, product wrappers, LP vault, and wrapper-share AMMs
 Ethereum pilot deployer can bootstrap first product AMM liquidity
 deployers expose a read-only health lens for protocol health dashboards
 health lens reads market, LP vault, wrapper, series, and auction status

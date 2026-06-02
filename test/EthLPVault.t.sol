@@ -6,6 +6,7 @@ import {RollAuction, IERC20Like} from "../src/RollAuction.sol";
 import {MockSettlementOracle} from "../src/oracle/MockSettlementOracle.sol";
 import {EthTokenAMM} from "../src/market/EthTokenAMM.sol";
 import {EthLPVault} from "../src/vault/EthLPVault.sol";
+import {SeriesExposureVault} from "../src/vault/SeriesExposureVault.sol";
 import {MintBurnToken} from "../src/token/MintBurnToken.sol";
 
 interface Vm {
@@ -24,6 +25,10 @@ contract VaultTestBase {
 
     function assertGt(uint256 actual, uint256 minimum) internal pure {
         require(actual > minimum, "not greater");
+    }
+
+    function assertEq(address actual, address expected) internal pure {
+        require(actual == expected, "address mismatch");
     }
 }
 
@@ -57,6 +62,7 @@ contract EthLPVaultTest is VaultTestBase {
     uint64 internal constant MIN_BACKSTOP_DELAY = 4 hours;
     uint64 internal constant MIN_AUCTION_TIME_LEFT = 6 hours;
     uint16 internal constant MAX_AUCTION_PRICE_DROP_BPS = 200;
+    uint16 internal constant PRODUCT_TRADE_FEE_BPS = 30;
 
     function setUp() public {
         vault = new EthLPVault(
@@ -69,7 +75,8 @@ contract EthLPVaultTest is VaultTestBase {
             MIN_AUCTION_DURATION,
             MIN_BACKSTOP_DELAY,
             MIN_AUCTION_TIME_LEFT,
-            MAX_AUCTION_PRICE_DROP_BPS
+            MAX_AUCTION_PRICE_DROP_BPS,
+            PRODUCT_TRADE_FEE_BPS
         );
         factory = new EthOptionsFactory();
         oracle = new MockSettlementOracle();
@@ -225,6 +232,81 @@ contract EthLPVaultTest is VaultTestBase {
         EthTokenAMM badMarket = _seedBadMarket(newN, "bad newN liquidity market", "badN-LP");
         vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
         vault.addInventoryLiquidity(factory, newSeriesId, true, badMarket, 0.2 ether, 0.2 ether, 0);
+    }
+
+    function testInventoryLiquidityRejectsEthAbovePerActionLimit() public {
+        EthLPVault riskVault = new EthLPVault(
+            address(this),
+            4 days,
+            MAX_ETH_PER_ROLL,
+            5 ether,
+            MAX_ROLL_PRICE,
+            MIN_INVENTORY_SALE_PRICE,
+            MIN_AUCTION_DURATION,
+            MIN_BACKSTOP_DELAY,
+            MIN_AUCTION_TIME_LEFT,
+            MAX_AUCTION_PRICE_DROP_BPS,
+            PRODUCT_TRADE_FEE_BPS
+        );
+        vm.prank(alice);
+        riskVault.deposit{value: 4 ether}();
+        uint256 auctionId = _createOldPAuction(1 ether);
+
+        vm.warp(block.timestamp + 12 hours);
+        riskVault.fillSteadyRoll(
+            factory, auction, oldSeriesId, newSeriesId, auctionId, 0.5 ether, 0.6 ether, 0.5 ether
+        );
+
+        EthTokenAMM market = _seedMarket(newN, "newN direct market", "newN-LP");
+
+        vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
+        riskVault.addInventoryLiquidity(factory, newSeriesId, true, market, 0.2 ether, MAX_ETH_PER_ROLL + 1, 0);
+    }
+
+    function testUserCanBuySteadyFromLpVaultWithEth() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, 0.498 ether, alice);
+
+        assertEq(sharesOut, 0.4985 ether);
+        assertEq(steady.share().balanceOf(alice), 0.4985 ether);
+        assertEq(steady.totalAssets(), 0.4985 ether);
+        assertEq(oldN.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(vault.activeStrategyEth(), 0.4985 ether);
+        assertEq(vault.managedAssets(), 2.0015 ether);
+    }
+
+    function testUserCanSellSteadyBackToLpVaultForEth() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, 0, alice);
+
+        MintBurnToken steadyShare = steady.share();
+        vm.prank(alice);
+        steadyShare.approve(address(vault), sharesOut);
+
+        uint256 aliceBefore = alice.balance;
+        vm.prank(alice);
+        uint256 ethOut = vault.sellSteady(factory, oldSeriesId, steady, sharesOut, 0.497 ether, alice);
+
+        assertEq(ethOut, 0.4970045 ether);
+        assertEq(alice.balance, aliceBefore + ethOut);
+        assertEq(steadyShare.balanceOf(alice), 0);
+        assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(vault.activeStrategyEth(), 0.997 ether);
+    }
+
+    function testUserProductTradeRejectsWrongWrapperSide() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(EthLPVault.ProductTokenMismatch.selector);
+        vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, boosted, 0, alice);
     }
 
     function testInventorySaleRejectsBelowVaultPriceFloor() public {

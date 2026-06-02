@@ -5,6 +5,7 @@ import {EthOptionsFactory} from "../EthOptionsFactory.sol";
 import {RollAuction, IERC20Like} from "../RollAuction.sol";
 import {EthTokenAMM} from "../market/EthTokenAMM.sol";
 import {MintBurnToken} from "../token/MintBurnToken.sol";
+import {SeriesExposureVault} from "./SeriesExposureVault.sol";
 
 /// @notice ETH-denominated LP vault shell for roll liquidity providers.
 /// @dev The vault pauses new deposits and withdrawal requests while strategy
@@ -24,6 +25,7 @@ contract EthLPVault {
     uint256 public immutable maxRollPriceWad;
     uint256 public immutable minInventorySalePriceWad;
     uint16 public immutable maxAuctionPriceDropBps;
+    uint16 public immutable productTradeFeeBps;
     uint256 public reservedEth;
     uint256 public activeStrategyEth;
     bool public strategyActive;
@@ -59,7 +61,8 @@ contract EthLPVault {
         uint64 minAuctionDuration,
         uint64 minBackstopDelay,
         uint64 minAuctionTimeLeft,
-        uint16 maxAuctionPriceDropBps
+        uint16 maxAuctionPriceDropBps,
+        uint16 productTradeFeeBps
     );
     event SteadyRollFilled(
         bytes32 indexed oldSeriesId,
@@ -81,6 +84,24 @@ contract EthLPVault {
     event SeriesRedeemed(address indexed factory, bytes32 indexed seriesId, address indexed token, uint256 amount);
     event InventorySold(
         address indexed market, bytes32 indexed seriesId, address indexed token, uint256 tokenIn, uint256 ethOut
+    );
+    event ProductBought(
+        address indexed wrapper,
+        bytes32 indexed seriesId,
+        address indexed recipient,
+        bool boostedSide,
+        uint256 ethIn,
+        uint256 feeEth,
+        uint256 sharesOut
+    );
+    event ProductSold(
+        address indexed wrapper,
+        bytes32 indexed seriesId,
+        address indexed recipient,
+        bool boostedSide,
+        uint256 sharesIn,
+        uint256 feeEth,
+        uint256 ethOut
     );
     event InventoryLiquidityAdded(
         address indexed market,
@@ -109,6 +130,9 @@ contract EthLPVault {
     error AuctionTokenMismatch();
     error MarketTokenMismatch();
     error MarketLiquidityMissing();
+    error ProductTokenMismatch();
+    error InvalidRecipient();
+    error Slippage();
     error StrategyPolicyViolation();
     error InsufficientManagedAssets();
     error WithdrawNotReady();
@@ -124,12 +148,14 @@ contract EthLPVault {
         uint64 minAuctionDuration_,
         uint64 minBackstopDelay_,
         uint64 minAuctionTimeLeft_,
-        uint16 maxAuctionPriceDropBps_
+        uint16 maxAuctionPriceDropBps_,
+        uint16 productTradeFeeBps_
     ) {
         if (
             manager_ == address(0) || maxEthPerRoll_ == 0 || maxActiveStrategyEth_ < maxEthPerRoll_
                 || maxRollPriceWad_ == 0 || minInventorySalePriceWad_ > WAD || minAuctionDuration_ == 0
                 || minBackstopDelay_ + minAuctionTimeLeft_ > minAuctionDuration_ || maxAuctionPriceDropBps_ > BPS
+                || productTradeFeeBps_ >= BPS
         ) {
             revert StrategyPolicyViolation();
         }
@@ -144,6 +170,7 @@ contract EthLPVault {
         minBackstopDelay = minBackstopDelay_;
         minAuctionTimeLeft = minAuctionTimeLeft_;
         maxAuctionPriceDropBps = maxAuctionPriceDropBps_;
+        productTradeFeeBps = productTradeFeeBps_;
         share = new MintBurnToken("Steady Roll LP ETH", "srLP-ETH", address(this));
 
         emit StrategyPolicySet(
@@ -154,7 +181,8 @@ contract EthLPVault {
             minAuctionDuration_,
             minBackstopDelay_,
             minAuctionTimeLeft_,
-            maxAuctionPriceDropBps_
+            maxAuctionPriceDropBps_,
+            productTradeFeeBps_
         );
     }
 
@@ -348,6 +376,64 @@ contract EthLPVault {
         emit InventorySold(address(market), seriesId, address(token), amount, ethOut);
     }
 
+    function buySteady(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        uint256 minSharesOut,
+        address recipient
+    ) external payable returns (uint256 sharesOut) {
+        return _buyProduct(factory, seriesId, wrapper, false, minSharesOut, recipient);
+    }
+
+    function buyBoosted(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        uint256 minSharesOut,
+        address recipient
+    ) external payable returns (uint256 sharesOut) {
+        return _buyProduct(factory, seriesId, wrapper, true, minSharesOut, recipient);
+    }
+
+    function sellSteady(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        uint256 sharesIn,
+        uint256 minEthOut,
+        address recipient
+    ) external returns (uint256 ethOut) {
+        return _sellProduct(factory, seriesId, wrapper, false, sharesIn, minEthOut, recipient);
+    }
+
+    function sellBoosted(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        uint256 sharesIn,
+        uint256 minEthOut,
+        address recipient
+    ) external returns (uint256 ethOut) {
+        return _sellProduct(factory, seriesId, wrapper, true, sharesIn, minEthOut, recipient);
+    }
+
+    function quoteBuyProduct(SeriesExposureVault wrapper, uint256 ethIn) external view returns (uint256 sharesOut) {
+        uint256 productAmount = _netOfFee(ethIn);
+        return wrapper.convertToShares(productAmount);
+    }
+
+    function quoteSellProduct(SeriesExposureVault wrapper, uint256 sharesIn)
+        external
+        view
+        returns (uint256 ethOut, uint256 feeEth, uint256 productAmount)
+    {
+        if (sharesIn == 0) revert ZeroAmount();
+        productAmount = wrapper.convertToAssets(sharesIn);
+        feeEth = _tradeFee(productAmount);
+        ethOut = productAmount - feeEth;
+    }
+
     function addInventoryLiquidity(
         EthOptionsFactory factory,
         bytes32 seriesId,
@@ -359,7 +445,9 @@ contract EthLPVault {
     ) external onlyManager returns (uint256 shares, uint256 ethIn, uint256 tokenIn) {
         if (tokenAmount == 0 || ethAmount == 0) revert ZeroAmount();
         if (ethAmount > managedAssets()) revert InsufficientManagedAssets();
-        if (activeStrategyEth + ethAmount > maxActiveStrategyEth) revert StrategyPolicyViolation();
+        if (ethAmount > maxEthPerRoll || activeStrategyEth + ethAmount > maxActiveStrategyEth) {
+            revert StrategyPolicyViolation();
+        }
 
         _trackInventory(factory, seriesId);
         MintBurnToken token = _matchingInventoryToken(factory, seriesId, useN, market);
@@ -430,6 +518,76 @@ contract EthLPVault {
 
     function inventoryMarketsLength() external view returns (uint256) {
         return inventoryMarkets.length;
+    }
+
+    function _buyProduct(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        bool boostedSide,
+        uint256 minSharesOut,
+        address recipient
+    ) internal returns (uint256 sharesOut) {
+        if (recipient == address(0)) revert InvalidRecipient();
+        if (msg.value == 0) revert ZeroAmount();
+
+        uint256 feeEth = _tradeFee(msg.value);
+        uint256 productAmount = msg.value - feeEth;
+        if (productAmount == 0 || productAmount > maxEthPerRoll) revert StrategyPolicyViolation();
+        if (activeStrategyEth + productAmount > maxActiveStrategyEth) revert StrategyPolicyViolation();
+
+        (MintBurnToken pToken, MintBurnToken nToken) = _tokens(factory, seriesId);
+        MintBurnToken productToken = boostedSide ? nToken : pToken;
+        if (address(wrapper.currentToken()) != address(productToken)) revert ProductTokenMismatch();
+
+        _trackInventory(factory, seriesId);
+        strategyActive = true;
+        activeStrategyEth += productAmount;
+
+        factory.mint{value: productAmount}(seriesId);
+        productToken.approve(address(wrapper), productAmount);
+        sharesOut = wrapper.deposit(productAmount, minSharesOut, recipient);
+        productToken.approve(address(wrapper), 0);
+        _refreshInventoryStatus(factory, seriesId);
+
+        emit ProductBought(address(wrapper), seriesId, recipient, boostedSide, msg.value, feeEth, sharesOut);
+    }
+
+    function _sellProduct(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        bool boostedSide,
+        uint256 sharesIn,
+        uint256 minEthOut,
+        address recipient
+    ) internal returns (uint256 ethOut) {
+        if (recipient == address(0)) revert InvalidRecipient();
+        if (sharesIn == 0) revert ZeroAmount();
+
+        (MintBurnToken pToken, MintBurnToken nToken) = _tokens(factory, seriesId);
+        MintBurnToken productToken = boostedSide ? nToken : pToken;
+        MintBurnToken wrapperShare = wrapper.share();
+        if (address(wrapper.currentToken()) != address(productToken)) revert ProductTokenMismatch();
+
+        _trackInventory(factory, seriesId);
+        if (!wrapperShare.transferFrom(msg.sender, address(this), sharesIn)) revert MarketTokenMismatch();
+        uint256 productAmount = wrapper.redeem(sharesIn, 0, address(this));
+        uint256 feeEth = _tradeFee(productAmount);
+        ethOut = productAmount - feeEth;
+        if (ethOut == 0) revert ZeroAmount();
+        if (ethOut < minEthOut) revert Slippage();
+        if (productAmount > maxEthPerRoll || activeStrategyEth + productAmount > maxActiveStrategyEth) {
+            revert StrategyPolicyViolation();
+        }
+        if (ethOut > managedAssets()) revert InsufficientManagedAssets();
+
+        strategyActive = true;
+        activeStrategyEth += productAmount;
+        _refreshInventoryStatus(factory, seriesId);
+        _sendEth(recipient, ethOut);
+
+        emit ProductSold(address(wrapper), seriesId, recipient, boostedSide, sharesIn, feeEth, ethOut);
     }
 
     function _trackInventory(EthOptionsFactory factory, bytes32 seriesId) internal {
@@ -512,6 +670,14 @@ contract EthLPVault {
 
         uint256 poolPriceWad = (ethReserve * WAD) / tokenReserve;
         if (poolPriceWad < minInventorySalePriceWad) revert StrategyPolicyViolation();
+    }
+
+    function _tradeFee(uint256 amount) internal view returns (uint256) {
+        return (amount * productTradeFeeBps) / BPS;
+    }
+
+    function _netOfFee(uint256 amount) internal view returns (uint256) {
+        return amount - _tradeFee(amount);
     }
 
     function _mulDivUp(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256) {

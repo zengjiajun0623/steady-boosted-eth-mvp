@@ -43,6 +43,7 @@ contract EthLPVaultKeeperTest {
     uint256 internal constant MIN_REWARDED_AMOUNT = 0.1 ether;
     uint256 internal constant KEEPER_REWARD = 0.01 ether;
     uint256 internal constant MIN_INVENTORY_SALE_PRICE = 0.95e18;
+    uint16 internal constant PRODUCT_TRADE_FEE_BPS = 30;
 
     function setUp() public {
         keeper = new EthLPVaultKeeper(MIN_REWARDED_AMOUNT, KEEPER_REWARD);
@@ -56,7 +57,8 @@ contract EthLPVaultKeeperTest {
             12 hours,
             4 hours,
             6 hours,
-            200
+            200,
+            PRODUCT_TRADE_FEE_BPS
         );
         keeper.setVault(vault);
         keeper.setRollSellers(steadyVault, boostedVault);
@@ -148,7 +150,8 @@ contract EthLPVaultKeeperTest {
                 12 hours,
                 4 hours,
                 6 hours,
-                200
+                200,
+                PRODUCT_TRADE_FEE_BPS
             );
         freshKeeper.setVault(freshVault);
         vm.prank(alice);
@@ -315,7 +318,8 @@ contract EthLPVaultKeeperTest {
                 12 hours,
                 4 hours,
                 6 hours,
-                200
+                200,
+                PRODUCT_TRADE_FEE_BPS
             );
 
         vm.prank(caller);
