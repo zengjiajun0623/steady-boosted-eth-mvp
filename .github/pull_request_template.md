@@ -22,9 +22,9 @@ Check any area touched by this PR:
 
 - [ ] `forge test -vvv`
 - [ ] `node ops/mvp-acceptance.mjs --local-live`
+- [ ] `node ops/production-readiness.mjs ...` if this PR claims production launch readiness
 - [ ] economics or capacity check, if relevant
 - [ ] demo/browser check, if relevant
 
 ## Risk Notes
-
 

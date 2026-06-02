@@ -1,0 +1,409 @@
+#!/usr/bin/env node
+
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+
+function usage() {
+  return `Usage:
+  node ops/production-readiness.mjs --manifest <path> --rpc <MAINNET_RPC_URL> [options]
+
+Required production evidence:
+  --audit-report <path>          Final external audit report or audit evidence file
+  --incident-runbook <path>      Incident response and emergency communications runbook
+  --solver-commitments <path>    Solver/liquidity commitment evidence
+  --boosted-demand-eth <eth>     Credible committed Boosted/N demand
+  --solver-float-eth <eth>       Credible external solver balance sheet
+
+Options:
+  --manifest <path>              Production deployment manifest
+  --rpc <url>                    Ethereum mainnet RPC URL
+  --json                         Print machine-readable JSON
+  --skip-live                    Only run static/evidence checks
+  --skip-oracle-preflight        Skip mainnet Uniswap pool preflight
+  --skip-readiness               Skip strict live readiness
+
+Environment fallbacks:
+  MAINNET_RPC_URL or RPC_URL
+  PRODUCTION_MANIFEST
+  PRODUCTION_AUDIT_REPORT
+  PRODUCTION_INCIDENT_RUNBOOK
+  PRODUCTION_SOLVER_COMMITMENTS
+
+Example:
+  node ops/production-readiness.mjs \\
+    --manifest manifests/production.json \\
+    --rpc $MAINNET_RPC_URL \\
+    --audit-report evidence/audit-final.md \\
+    --incident-runbook ops/incident-runbook.md \\
+    --solver-commitments evidence/solver-commitments.md \\
+    --boosted-demand-eth 5000 \\
+    --solver-float-eth 250`;
+}
+
+function parseArgs(argv) {
+  const args = {
+    manifest: process.env.PRODUCTION_MANIFEST || "",
+    rpc: process.env.MAINNET_RPC_URL || process.env.RPC_URL || "",
+    auditReport: process.env.PRODUCTION_AUDIT_REPORT || "",
+    incidentRunbook: process.env.PRODUCTION_INCIDENT_RUNBOOK || "",
+    solverCommitments: process.env.PRODUCTION_SOLVER_COMMITMENTS || "",
+    boostedDemandEth: "",
+    solverFloatEth: "",
+    json: false,
+    skipLive: false,
+    skipOraclePreflight: false,
+    skipReadiness: false,
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const next = () => {
+      if (i + 1 >= argv.length) throw new Error(`Missing value for ${arg}`);
+      i += 1;
+      return argv[i];
+    };
+
+    if (arg === "--help" || arg === "-h") {
+      console.log(usage());
+      process.exit(0);
+    } else if (arg === "--manifest") {
+      args.manifest = next();
+    } else if (arg === "--rpc") {
+      args.rpc = next();
+    } else if (arg === "--audit-report") {
+      args.auditReport = next();
+    } else if (arg === "--incident-runbook") {
+      args.incidentRunbook = next();
+    } else if (arg === "--solver-commitments") {
+      args.solverCommitments = next();
+    } else if (arg === "--boosted-demand-eth") {
+      args.boostedDemandEth = next();
+    } else if (arg === "--solver-float-eth") {
+      args.solverFloatEth = next();
+    } else if (arg === "--json") {
+      args.json = true;
+    } else if (arg === "--skip-live") {
+      args.skipLive = true;
+    } else if (arg === "--skip-oracle-preflight") {
+      args.skipOraclePreflight = true;
+    } else if (arg === "--skip-readiness") {
+      args.skipReadiness = true;
+    } else {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+  }
+
+  return args;
+}
+
+function resolveRepoPath(file) {
+  if (!file) return "";
+  return path.isAbsolute(file) ? file : path.join(ROOT, file);
+}
+
+function exists(file) {
+  return Boolean(file) && fs.existsSync(resolveRepoPath(file));
+}
+
+function readText(file) {
+  return fs.readFileSync(resolveRepoPath(file), "utf8");
+}
+
+function parseJsonFile(file) {
+  return JSON.parse(readText(file));
+}
+
+function positiveEth(value) {
+  if (!value) return false;
+  if (!/^\d+(\.\d+)?$/.test(value)) return false;
+  return Number(value) > 0;
+}
+
+function pass(checks, area, name, detail, meta = {}) {
+  checks.push({ level: "pass", area, name, detail, meta });
+}
+
+function fail(checks, area, name, detail, meta = {}) {
+  checks.push({ level: "fail", area, name, detail, meta });
+}
+
+function warn(checks, area, name, detail, meta = {}) {
+  checks.push({ level: "warn", area, name, detail, meta });
+}
+
+function runNode(checks, area, name, args, options = {}) {
+  const result = spawnSync("node", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024 * 20,
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
+  if (result.status === 0) {
+    pass(checks, area, name, options.passDetail || "Command passed.", { command: ["node", ...args].join(" ") });
+  } else {
+    fail(
+      checks,
+      area,
+      name,
+      options.failDetail || `Command failed with exit code ${result.status}.`,
+      { command: ["node", ...args].join(" "), output: output.slice(-4000) },
+    );
+  }
+}
+
+function checkSecurityStatus(checks) {
+  const file = "SECURITY.md";
+  if (!exists(file)) {
+    fail(checks, "security", "security policy exists", "SECURITY.md is missing.");
+    return;
+  }
+
+  const text = readText(file);
+  const blockers = [
+    [/not ready for public funds/i, "SECURITY.md still says the repo is not ready for public funds."],
+    [/Real-fund deployment:\s*not approved/i, "Real-fund deployment is still marked not approved."],
+    [/External audit:\s*not complete/i, "External audit is still marked not complete."],
+    [/Bug bounty:\s*not active/i, "Bug bounty is still marked not active."],
+  ].filter(([pattern]) => pattern.test(text));
+
+  if (blockers.length === 0) {
+    pass(checks, "security", "security policy production status", "SECURITY.md no longer carries MVP launch blockers.");
+  } else {
+    fail(
+      checks,
+      "security",
+      "security policy production status",
+      blockers.map(([, detail]) => detail).join(" "),
+      { file },
+    );
+  }
+}
+
+function checkEvidenceFile(checks, area, name, file, detail) {
+  if (!file) {
+    fail(checks, area, name, `${detail} Pass the evidence path explicitly.`);
+    return;
+  }
+  if (!exists(file)) {
+    fail(checks, area, name, `${detail} File not found: ${file}.`, { file });
+    return;
+  }
+  const size = fs.statSync(resolveRepoPath(file)).size;
+  if (size === 0) {
+    fail(checks, area, name, `${detail} File is empty: ${file}.`, { file });
+    return;
+  }
+  pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
+}
+
+function checkManifest(checks, manifestPath) {
+  if (!manifestPath) {
+    fail(checks, "deployment", "production manifest provided", "Pass --manifest for the production deployment.");
+    return null;
+  }
+  if (!exists(manifestPath)) {
+    fail(checks, "deployment", "production manifest provided", `Manifest file not found: ${manifestPath}.`, {
+      manifest: manifestPath,
+    });
+    return null;
+  }
+
+  let manifest;
+  try {
+    manifest = parseJsonFile(manifestPath);
+  } catch (error) {
+    fail(checks, "deployment", "production manifest parses", `Manifest JSON parse failed: ${error.message}.`, {
+      manifest: manifestPath,
+    });
+    return null;
+  }
+
+  pass(checks, "deployment", "production manifest parses", `Manifest parsed: ${manifestPath}.`, {
+    manifest: manifestPath,
+  });
+
+  if (manifest.mode === "production") {
+    pass(checks, "deployment", "manifest mode is production", "Manifest mode is production.");
+  } else {
+    fail(
+      checks,
+      "deployment",
+      "manifest mode is production",
+      `Manifest mode is '${manifest.mode || "unset"}'. Production launch requires mode 'production'.`,
+      { mode: manifest.mode || null },
+    );
+  }
+
+  if (path.normalize(manifestPath) === path.normalize(path.join("demo", "contract-manifest.json"))) {
+    fail(
+      checks,
+      "deployment",
+      "manifest is not demo manifest",
+      "demo/contract-manifest.json is a local demo manifest and cannot be used for production approval.",
+    );
+  } else {
+    pass(checks, "deployment", "manifest is not demo manifest", "Production gate is pointed at a non-demo manifest.");
+  }
+
+  return manifest;
+}
+
+function runLiveChecks(checks, args, manifestReady) {
+  if (args.skipLive) {
+    warn(checks, "live", "live production gates", "Skipped by --skip-live.");
+    return;
+  }
+  if (!args.rpc) {
+    fail(checks, "live", "mainnet RPC provided", "Pass --rpc or MAINNET_RPC_URL/RPC_URL.");
+    return;
+  }
+  pass(checks, "live", "mainnet RPC provided", "RPC URL was provided.");
+
+  if (!args.skipOraclePreflight) {
+    runNode(
+      checks,
+      "oracle",
+      "mainnet oracle preflight",
+      ["ops/mainnet-oracle-preflight.mjs", "--rpc", args.rpc, "--json"],
+      {
+        passDetail: "Mainnet Uniswap oracle pool facts matched the expected USDC/USDT/DAI configuration.",
+        failDetail: "Mainnet oracle preflight failed.",
+      },
+    );
+  } else {
+    warn(checks, "oracle", "mainnet oracle preflight", "Skipped by --skip-oracle-preflight.");
+  }
+
+  if (!manifestReady) {
+    fail(checks, "readiness", "strict production readiness", "Cannot run live readiness without a valid manifest.");
+    return;
+  }
+
+  if (!args.skipReadiness) {
+    runNode(
+      checks,
+      "readiness",
+      "strict production readiness",
+      [
+        "ops/readiness-check.mjs",
+        "--manifest",
+        args.manifest,
+        "--rpc",
+        args.rpc,
+        "--strict",
+        "--require-median-oracle",
+        "--capacity-strict",
+        "--expect-chain-id",
+        "0x1",
+        "--boosted-demand-eth",
+        args.boostedDemandEth,
+        "--solver-float-eth",
+        args.solverFloatEth,
+        "--json",
+      ],
+      {
+        passDetail: "Strict live readiness passed with median oracle and capacity gates.",
+        failDetail: "Strict live readiness failed.",
+      },
+    );
+  } else {
+    warn(checks, "readiness", "strict production readiness", "Skipped by --skip-readiness.");
+  }
+}
+
+function summarize(checks) {
+  return checks.reduce(
+    (counts, check) => {
+      counts[check.level] += 1;
+      return counts;
+    },
+    { pass: 0, warn: 0, fail: 0 },
+  );
+}
+
+function printText(checks) {
+  const counts = summarize(checks);
+  const status = counts.fail > 0 ? "FAIL" : counts.warn > 0 ? "WARN" : "PASS";
+  console.log(`Production readiness: ${status} (${counts.pass} pass, ${counts.warn} warn, ${counts.fail} fail)`);
+  for (const check of checks) {
+    const label = check.level.toUpperCase();
+    console.log(`${label} [${check.area}] ${check.name}`);
+    console.log(`     ${check.detail}`);
+  }
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const checks = [];
+
+  checkSecurityStatus(checks);
+  checkEvidenceFile(
+    checks,
+    "security",
+    "external audit evidence",
+    args.auditReport,
+    "Production requires final external audit evidence.",
+  );
+  checkEvidenceFile(
+    checks,
+    "operations",
+    "incident response runbook",
+    args.incidentRunbook,
+    "Production requires an incident response runbook.",
+  );
+  checkEvidenceFile(
+    checks,
+    "liquidity",
+    "solver and liquidity commitments",
+    args.solverCommitments,
+    "Production requires real solver/liquidity commitment evidence.",
+  );
+
+  if (positiveEth(args.boostedDemandEth)) {
+    pass(checks, "liquidity", "committed Boosted/N demand", `Boosted demand commitment: ${args.boostedDemandEth} ETH.`);
+  } else {
+    fail(
+      checks,
+      "liquidity",
+      "committed Boosted/N demand",
+      "Pass --boosted-demand-eth with a positive committed ETH amount.",
+      { boostedDemandEth: args.boostedDemandEth || null },
+    );
+  }
+  if (positiveEth(args.solverFloatEth)) {
+    pass(checks, "liquidity", "committed solver float", `Solver float commitment: ${args.solverFloatEth} ETH.`);
+  } else {
+    fail(
+      checks,
+      "liquidity",
+      "committed solver float",
+      "Pass --solver-float-eth with a positive committed ETH amount.",
+      { solverFloatEth: args.solverFloatEth || null },
+    );
+  }
+
+  const manifest = checkManifest(checks, args.manifest);
+  runLiveChecks(checks, args, Boolean(manifest));
+
+  if (args.json) {
+    const counts = summarize(checks);
+    const status = counts.fail > 0 ? "fail" : counts.warn > 0 ? "warn" : "pass";
+    console.log(JSON.stringify({ status, checks }, null, 2));
+  } else {
+    printText(checks);
+  }
+
+  if (checks.some((check) => check.level !== "pass")) process.exit(1);
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}

@@ -21,6 +21,7 @@ const NODE_CHECKS = [
   "ops/mvp-acceptance.mjs",
   "ops/mvp-objective-audit.mjs",
   "ops/no-admin-surface-check.mjs",
+  "ops/production-readiness.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",
   "ops/solver-improvement-report.mjs",

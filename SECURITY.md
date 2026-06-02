@@ -15,6 +15,23 @@ The contracts and public runners are designed around strict decentralization and
 capacity controls, but they still need security review, threat modeling, gas
 profiling, fuzzing, and production readiness evidence before launch.
 
+Before any real-fund launch, the production gate must pass:
+
+```bash
+node ops/production-readiness.mjs \
+  --manifest manifests/production.json \
+  --rpc $MAINNET_RPC_URL \
+  --audit-report evidence/audit-final.md \
+  --incident-runbook ops/incident-runbook.md \
+  --solver-commitments evidence/solver-commitments.md \
+  --boosted-demand-eth 5000 \
+  --solver-float-eth 250
+```
+
+This is intentionally stricter than the MVP acceptance gate. The MVP gate proves
+the local product works; the production gate requires external safety evidence
+and a live mainnet-ready deployment manifest.
+
 ## Reporting Security Issues
 
 For now, report security issues privately to the repository owner or in the

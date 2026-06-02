@@ -380,6 +380,24 @@ pricing oracle.
 
 This is a research MVP and is not ready for public funds.
 
+Production launch approval should use the separate production gate:
+
+```bash
+node ops/production-readiness.mjs \
+  --manifest manifests/production.json \
+  --rpc $MAINNET_RPC_URL \
+  --audit-report evidence/audit-final.md \
+  --incident-runbook ops/incident-runbook.md \
+  --solver-commitments evidence/solver-commitments.md \
+  --boosted-demand-eth 5000 \
+  --solver-float-eth 250
+```
+
+That gate intentionally fails today. It should keep failing until a real
+production manifest, external audit evidence, incident response runbook,
+solver/liquidity commitments, mainnet oracle preflight, and strict live
+readiness all pass.
+
 Known gaps before real value:
 
 ```text
