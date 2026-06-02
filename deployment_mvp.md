@@ -176,7 +176,14 @@ series TWAP window comes from EthereumMainnetOracleConfig
 settlement oracle is MedianStableTwapSettlementOracle
 ```
 
-Deploy the wiring contract:
+`DeployEthereumPilot` is a topology specification and test helper. Its runtime
+is intentionally large because it bundles deployment, topology getters, and seed
+helpers. Do not use it as a production `forge create` target. A production
+pilot should broadcast the individual component deployments, export a manifest,
+and then pass `ops/production-readiness.mjs` against that manifest.
+
+The old all-in-one helper shape looked like this, but it is not the production
+path:
 
 ```bash
 forge create script/DeployEthereumPilot.sol:DeployEthereumPilot \
