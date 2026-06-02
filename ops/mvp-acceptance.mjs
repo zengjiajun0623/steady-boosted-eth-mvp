@@ -11,6 +11,7 @@ const DEFAULT_END = "2026-06-01";
 
 const NODE_CHECKS = [
   "demo/app.js",
+  "ops/audit-scope-check.mjs",
   "ops/contract-size-check.mjs",
   "ops/deploy-ethereum-pilot.mjs",
   "ops/demo-page-smoke.mjs",
@@ -275,6 +276,12 @@ function buildSteps(args) {
       name: "No-admin surface check",
       command: "node",
       args: ["ops/no-admin-surface-check.mjs"],
+    });
+    steps.push({
+      area: "security",
+      name: "External audit scope alignment",
+      command: "node",
+      args: ["ops/audit-scope-check.mjs"],
     });
     steps.push({
       area: "objective",

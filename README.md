@@ -189,6 +189,7 @@ Start here if you are joining the project:
 TEAM_HANDOFF.md      product mental model, invariants, and next workstreams
 contracts_mvp.md     contract behavior and test coverage
 deployment_mvp.md    local and Ethereum pilot deployment
+audit_scope.md       external audit scope and invariant checklist
 solver_market.md     solver onboarding and fill attribution
 SECURITY.md          current security posture and non-production caveats
 CONTRIBUTING.md      PR expectations
@@ -225,6 +226,7 @@ Verification, keeper, settlement, and solver scripts:
 ```text
 ops/mvp-acceptance.mjs             full local/live acceptance gate
 ops/mvp-objective-audit.mjs        maps MVP requirements to concrete repo evidence
+ops/audit-scope-check.mjs          keeps audit scope aligned with production contracts
 ops/readiness-check.mjs            live manifest readiness gate
 ops/deploy-ethereum-pilot.mjs      direct Ethereum pilot deploy + manifest export
 ops/production-monitor.mjs         readiness + keeper action monitor loop

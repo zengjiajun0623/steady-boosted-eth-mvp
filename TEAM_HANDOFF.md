@@ -164,6 +164,7 @@ Secondary AMMs can be added later, but they are not the required MVP trader rout
 README.md                       quick start and command list
 contracts_mvp.md                contract architecture and behavior
 deployment_mvp.md               local and Ethereum pilot deployment topology
+audit_scope.md                  external audit scope and invariant checklist
 oracle_settlement.md            settlement oracle notes
 decentralized_mvp.md            trust-minimized product design
 solver_market.md                solver onboarding and attribution guide
@@ -172,6 +173,7 @@ evidence/solver-commitments.example.json
 demo/index.html                 demo surface
 demo/app.js                     demo interactions and simulated/live mode
 ops/mvp-acceptance.mjs          full local acceptance gate
+ops/audit-scope-check.mjs       audit scope alignment check
 ops/readiness-check.mjs         live manifest readiness gate
 ops/deploy-ethereum-pilot.mjs   direct Ethereum pilot deploy, manifest export, and strict readiness
 ops/mainnet-oracle-preflight.mjs
