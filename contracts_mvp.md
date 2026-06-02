@@ -620,6 +620,7 @@ ETH LP deposits mint shares
 ETH LP withdrawals require the unlock delay
 ETH LP vault can bid Steady roll auctions with depositor ETH
 ETH LP vault can bid Boosted roll auctions with depositor ETH
+ETH LP vault fuzzes Steady and Boosted cleanup against factory P/N payoffs
 ETH LP deposits and withdrawal requests pause while inventory is open
 ETH LP strategy cannot close until tracked inventory is redeemed
 ETH LP strategy rejects oversized rolls

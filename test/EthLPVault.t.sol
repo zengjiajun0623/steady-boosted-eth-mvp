@@ -354,6 +354,50 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(newN.balanceOf(address(vault)), 0);
     }
 
+    function testFuzzBoostedRollCleanupMatchesFactoryPayoffs(
+        uint256 rawOldSettlementPrice,
+        uint256 rawNewSettlementPrice,
+        uint256 rawRollPriceWad
+    ) public {
+        uint256 oldSettlementPrice = _boundedSettlementPrice(rawOldSettlementPrice);
+        uint256 newSettlementPrice = _boundedSettlementPrice(rawNewSettlementPrice);
+        uint256 rollPriceWad = 0.98e18 + (rawRollPriceWad % 0.07e18);
+        uint256 oldNAmount = 0.5 ether;
+        uint256 ethToMint = 0.6 ether;
+
+        _depositFromAlice(2 ether);
+        uint256 auctionId = _createOldNAuction(oldNAmount, rollPriceWad, rollPriceWad, 1 days);
+
+        vm.warp(block.timestamp + 12 hours);
+        uint256 quotedNewN = auction.quote(auctionId, oldNAmount);
+        uint256 newNPaid =
+            vault.fillBoostedRoll(factory, auction, oldSeriesId, newSeriesId, auctionId, oldNAmount, ethToMint, quotedNewN);
+        assertEq(newNPaid, quotedNewN);
+
+        uint256 leftoverNewN = ethToMint - newNPaid;
+        uint256 expectedManagedAssets = 2 ether - ethToMint
+            + (oldNAmount * factory.nPayoffWad(STRIKE, oldSettlementPrice)) / 1e18
+            + (ethToMint * factory.pPayoffWad(STRIKE, newSettlementPrice)) / 1e18
+            + (leftoverNewN * factory.nPayoffWad(STRIKE, newSettlementPrice)) / 1e18;
+
+        vm.warp(block.timestamp + NEW_MATURITY);
+        oracle.setSettlementPrice(oldSeriesId, oldSettlementPrice);
+        oracle.setSettlementPrice(newSeriesId, newSettlementPrice);
+        factory.settle(oldSeriesId);
+        factory.settle(newSeriesId);
+
+        vault.redeemN(factory, oldSeriesId, oldNAmount);
+        vault.redeemP(factory, newSeriesId, ethToMint);
+        vault.redeemN(factory, newSeriesId, leftoverNewN);
+        vault.closeStrategy();
+
+        assertEq(vault.managedAssets(), expectedManagedAssets);
+        assertEq(vault.openInventorySeriesCount(), 0);
+        assertEq(oldN.balanceOf(address(vault)), 0);
+        assertEq(newP.balanceOf(address(vault)), 0);
+        assertEq(newN.balanceOf(address(vault)), 0);
+    }
+
     function testManagerCanMergeMatchedInventoryAfterMaturityBeforeSettlement() public {
         _depositFromAlice(2 ether);
         uint256 auctionId = _createOldPAuction(1 ether);
