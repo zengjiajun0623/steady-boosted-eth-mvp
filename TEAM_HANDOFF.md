@@ -196,9 +196,9 @@ ops/capacity-policy.py          ETH-denominated capacity gate
    manifest modes such as `live`, `staging`, `pilot`, and `production`.
 
    Production launch approval should use `ops/production-readiness.mjs`. It is
-   stricter than MVP acceptance and should fail until audit evidence, incident
-   response, solver/liquidity commitments, mainnet oracle preflight, and strict
-   live readiness all pass.
+   stricter than MVP acceptance and should fail until full local acceptance,
+   audit evidence, incident response, solver/liquidity commitments, mainnet
+   oracle preflight, and strict live readiness all pass.
 
 2. Vault strategy
 

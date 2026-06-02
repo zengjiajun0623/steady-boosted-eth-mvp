@@ -23,7 +23,8 @@ Options:
   --manifest <path>              Production deployment manifest
   --rpc <url>                    Ethereum mainnet RPC URL
   --json                         Print machine-readable JSON
-  --skip-live                    Only run static/evidence checks
+  --skip-live                    Skip mainnet/live checks only
+  --skip-local-acceptance        Skip local acceptance check; this still fails production approval
   --skip-oracle-preflight        Skip mainnet Uniswap pool preflight
   --skip-readiness               Skip strict live readiness
 
@@ -56,6 +57,7 @@ function parseArgs(argv) {
     solverFloatEth: "",
     json: false,
     skipLive: false,
+    skipLocalAcceptance: false,
     skipOraclePreflight: false,
     skipReadiness: false,
   };
@@ -89,6 +91,8 @@ function parseArgs(argv) {
       args.json = true;
     } else if (arg === "--skip-live") {
       args.skipLive = true;
+    } else if (arg === "--skip-local-acceptance") {
+      args.skipLocalAcceptance = true;
     } else if (arg === "--skip-oracle-preflight") {
       args.skipOraclePreflight = true;
     } else if (arg === "--skip-readiness") {
@@ -320,6 +324,23 @@ function runLiveChecks(checks, args, manifestReady) {
   }
 }
 
+function runLocalAcceptance(checks, args) {
+  if (args.skipLocalAcceptance) {
+    warn(
+      checks,
+      "acceptance",
+      "full local acceptance",
+      "Skipped by --skip-local-acceptance. Production approval requires this check.",
+    );
+    return;
+  }
+
+  runNode(checks, "acceptance", "full local acceptance", ["ops/mvp-acceptance.mjs", "--local-live"], {
+    passDetail: "Full local acceptance passed at this commit.",
+    failDetail: "Full local acceptance failed.",
+  });
+}
+
 function summarize(checks) {
   return checks.reduce(
     (counts, check) => {
@@ -392,6 +413,7 @@ function main() {
   }
 
   const manifest = checkManifest(checks, args.manifest);
+  runLocalAcceptance(checks, args);
   runLiveChecks(checks, args, Boolean(manifest));
 
   if (args.json) {

@@ -29,8 +29,9 @@ node ops/production-readiness.mjs \
 ```
 
 This is intentionally stricter than the MVP acceptance gate. The MVP gate proves
-the local product works; the production gate requires external safety evidence
-and a live mainnet-ready deployment manifest.
+the local product works; the production gate re-runs that acceptance suite and
+also requires external safety evidence and a live mainnet-ready deployment
+manifest.
 
 ## Reporting Security Issues
 

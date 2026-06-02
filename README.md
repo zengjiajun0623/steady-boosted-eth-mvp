@@ -394,10 +394,10 @@ node ops/production-readiness.mjs \
   --solver-float-eth 250
 ```
 
-That gate intentionally fails today. It should keep failing until a real
-production manifest, external audit evidence, incident response runbook,
-solver/liquidity commitments, mainnet oracle preflight, and strict live
-readiness all pass.
+That gate intentionally fails today. It should keep failing until the full
+local acceptance suite, a real production manifest, external audit evidence,
+incident response runbook, solver/liquidity commitments, mainnet oracle
+preflight, and strict live readiness all pass.
 
 Known gaps before real value:
 
