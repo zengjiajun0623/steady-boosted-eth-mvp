@@ -174,6 +174,7 @@ ops/readiness-check.mjs         live manifest readiness gate
 ops/deploy-ethereum-pilot.mjs   direct Ethereum pilot deploy, manifest export, and strict readiness
 ops/mainnet-oracle-preflight.mjs
                                 mainnet oracle pool-fact preflight
+ops/production-monitor.mjs      readiness + keeper action monitor loop
 ops/keeper-decisions.mjs        public-state settlement/runner suggestions
 ops/keeper-runner.mjs           optional execution runner
 ops/solver-improvement-report.mjs

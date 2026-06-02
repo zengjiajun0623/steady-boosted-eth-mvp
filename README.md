@@ -227,6 +227,7 @@ ops/mvp-acceptance.mjs             full local/live acceptance gate
 ops/mvp-objective-audit.mjs        maps MVP requirements to concrete repo evidence
 ops/readiness-check.mjs            live manifest readiness gate
 ops/deploy-ethereum-pilot.mjs      direct Ethereum pilot deploy + manifest export
+ops/production-monitor.mjs         readiness + keeper action monitor loop
 ops/local-live-smoke.mjs           fresh Anvil trader/LP/solver/keeper proof
 ops/keeper-decisions.mjs           public-state settlement/keeper/solver suggestions
 ops/keeper-runner.mjs              optional action-scoped transaction runner

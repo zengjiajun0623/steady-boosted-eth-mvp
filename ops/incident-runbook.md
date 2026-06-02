@@ -26,6 +26,7 @@ SEV-3: Documentation, analytics, or non-blocking UI issue.
 4. Run readiness and keeper inspection:
    node ops/readiness-check.mjs --manifest <manifest> --rpc <rpc> --strict --require-median-oracle --capacity-strict
    node ops/keeper-decisions.mjs --manifest <manifest> --rpc <rpc>
+   node ops/production-monitor.mjs --manifest <manifest> --rpc <rpc> --expect-chain-id 0x1
 5. Check whether the issue is contract state, oracle readiness, solver liquidity,
    frontend/wallet routing, or docs/ops only.
 6. Publish an internal status note with current user impact and next update time.
