@@ -29,6 +29,7 @@ contract EthLPVault {
     uint256 public reservedEth;
     uint256 public activeStrategyEth;
     bool public strategyActive;
+    uint256 private locked = 1;
 
     struct WithdrawalRequest {
         uint256 assets;
@@ -137,6 +138,7 @@ contract EthLPVault {
     error InsufficientManagedAssets();
     error WithdrawNotReady();
     error EthTransferFailed();
+    error ReentrantCall();
 
     constructor(
         address manager_,
@@ -193,7 +195,14 @@ contract EthLPVault {
         _;
     }
 
-    function deposit() external payable returns (uint256 shares) {
+    modifier nonReentrant() {
+        if (locked != 1) revert ReentrantCall();
+        locked = 2;
+        _;
+        locked = 1;
+    }
+
+    function deposit() external payable nonReentrant returns (uint256 shares) {
         if (strategyActive) revert StrategyActive();
         if (msg.value == 0) revert ZeroAmount();
 
@@ -206,7 +215,7 @@ contract EthLPVault {
         emit Deposited(msg.sender, msg.value, shares);
     }
 
-    function requestWithdraw(uint256 shares) external returns (uint256 assets) {
+    function requestWithdraw(uint256 shares) external nonReentrant returns (uint256 assets) {
         if (strategyActive) revert StrategyActive();
         if (shares == 0) revert ZeroAmount();
 
@@ -224,7 +233,7 @@ contract EthLPVault {
         emit WithdrawalRequested(msg.sender, assets, shares, request.unlockAt);
     }
 
-    function claimWithdraw() external returns (uint256 assets) {
+    function claimWithdraw() external nonReentrant returns (uint256 assets) {
         WithdrawalRequest memory request = withdrawalRequests[msg.sender];
         if (request.assets == 0) revert ZeroAmount();
         if (block.timestamp < request.unlockAt) revert WithdrawNotReady();
@@ -246,7 +255,7 @@ contract EthLPVault {
         uint256 oldPAmount,
         uint256 ethToMint,
         uint256 maxNewPToPay
-    ) external onlyManager returns (uint256 newPPaid) {
+    ) external onlyManager nonReentrant returns (uint256 newPPaid) {
         if (oldPAmount == 0 || ethToMint == 0) revert ZeroAmount();
         if (ethToMint > managedAssets()) revert InsufficientManagedAssets();
         if (ethToMint > maxEthPerRoll || activeStrategyEth + ethToMint > maxActiveStrategyEth) {
@@ -289,7 +298,7 @@ contract EthLPVault {
         uint256 oldNAmount,
         uint256 ethToMint,
         uint256 maxNewNToPay
-    ) external onlyManager returns (uint256 newNPaid) {
+    ) external onlyManager nonReentrant returns (uint256 newNPaid) {
         if (oldNAmount == 0 || ethToMint == 0) revert ZeroAmount();
         if (ethToMint > managedAssets()) revert InsufficientManagedAssets();
         if (ethToMint > maxEthPerRoll || activeStrategyEth + ethToMint > maxActiveStrategyEth) {
@@ -323,7 +332,11 @@ contract EthLPVault {
         emit BoostedRollFilled(oldSeriesId, newSeriesId, auctionId, ethToMint, oldNAmount, newNPaid);
     }
 
-    function mergeSeries(EthOptionsFactory factory, bytes32 seriesId, uint256 amount) external onlyManager {
+    function mergeSeries(EthOptionsFactory factory, bytes32 seriesId, uint256 amount)
+        external
+        onlyManager
+        nonReentrant
+    {
         if (amount == 0) revert ZeroAmount();
         _trackInventory(factory, seriesId);
         factory.merge(seriesId, amount);
@@ -331,7 +344,7 @@ contract EthLPVault {
         emit SeriesMerged(address(factory), seriesId, amount);
     }
 
-    function redeemP(EthOptionsFactory factory, bytes32 seriesId, uint256 amount) external onlyManager {
+    function redeemP(EthOptionsFactory factory, bytes32 seriesId, uint256 amount) external onlyManager nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _trackInventory(factory, seriesId);
         (,,,,,, MintBurnToken pToken,,,,) = factory.series(seriesId);
@@ -340,7 +353,7 @@ contract EthLPVault {
         emit SeriesRedeemed(address(factory), seriesId, address(pToken), amount);
     }
 
-    function redeemN(EthOptionsFactory factory, bytes32 seriesId, uint256 amount) external onlyManager {
+    function redeemN(EthOptionsFactory factory, bytes32 seriesId, uint256 amount) external onlyManager nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _trackInventory(factory, seriesId);
         (,,,,,,, MintBurnToken nToken,,,) = factory.series(seriesId);
@@ -356,7 +369,7 @@ contract EthLPVault {
         EthTokenAMM market,
         uint256 amount,
         uint256 minEthOut
-    ) external onlyManager returns (uint256 ethOut) {
+    ) external onlyManager nonReentrant returns (uint256 ethOut) {
         if (amount == 0) revert ZeroAmount();
         _trackInventory(factory, seriesId);
 
@@ -382,7 +395,7 @@ contract EthLPVault {
         SeriesExposureVault wrapper,
         uint256 minSharesOut,
         address recipient
-    ) external payable returns (uint256 sharesOut) {
+    ) external payable nonReentrant returns (uint256 sharesOut) {
         return _buyProduct(factory, seriesId, wrapper, false, minSharesOut, recipient);
     }
 
@@ -392,7 +405,7 @@ contract EthLPVault {
         SeriesExposureVault wrapper,
         uint256 minSharesOut,
         address recipient
-    ) external payable returns (uint256 sharesOut) {
+    ) external payable nonReentrant returns (uint256 sharesOut) {
         return _buyProduct(factory, seriesId, wrapper, true, minSharesOut, recipient);
     }
 
@@ -403,7 +416,7 @@ contract EthLPVault {
         uint256 sharesIn,
         uint256 minEthOut,
         address recipient
-    ) external returns (uint256 ethOut) {
+    ) external nonReentrant returns (uint256 ethOut) {
         return _sellProduct(factory, seriesId, wrapper, false, sharesIn, minEthOut, recipient);
     }
 
@@ -414,7 +427,7 @@ contract EthLPVault {
         uint256 sharesIn,
         uint256 minEthOut,
         address recipient
-    ) external returns (uint256 ethOut) {
+    ) external nonReentrant returns (uint256 ethOut) {
         return _sellProduct(factory, seriesId, wrapper, true, sharesIn, minEthOut, recipient);
     }
 
@@ -442,7 +455,7 @@ contract EthLPVault {
         uint256 tokenAmount,
         uint256 ethAmount,
         uint256 minShares
-    ) external onlyManager returns (uint256 shares, uint256 ethIn, uint256 tokenIn) {
+    ) external onlyManager nonReentrant returns (uint256 shares, uint256 ethIn, uint256 tokenIn) {
         if (tokenAmount == 0 || ethAmount == 0) revert ZeroAmount();
         if (ethAmount > managedAssets()) revert InsufficientManagedAssets();
         if (ethAmount > maxEthPerRoll || activeStrategyEth + ethAmount > maxActiveStrategyEth) {
@@ -473,7 +486,7 @@ contract EthLPVault {
         uint256 shares,
         uint256 minEthOut,
         uint256 minTokenOut
-    ) external onlyManager returns (uint256 ethOut, uint256 tokenOut) {
+    ) external onlyManager nonReentrant returns (uint256 ethOut, uint256 tokenOut) {
         if (shares == 0) revert ZeroAmount();
 
         _trackInventory(factory, seriesId);
@@ -487,7 +500,7 @@ contract EthLPVault {
         emit InventoryLiquidityRemoved(address(market), seriesId, address(token), ethOut, tokenOut, shares);
     }
 
-    function closeStrategy() external onlyManager {
+    function closeStrategy() external onlyManager nonReentrant {
         if (openInventorySeriesCount != 0 || openInventoryMarketCount != 0) revert InventoryOpen();
 
         strategyActive = false;

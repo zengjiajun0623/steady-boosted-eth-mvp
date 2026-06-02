@@ -32,6 +32,49 @@ contract VaultTestBase {
     }
 }
 
+contract ReentrantClaimReceiver {
+    EthLPVault internal vault;
+    bool public attempted;
+    bool public reentrySucceeded;
+
+    constructor(EthLPVault vault_) {
+        vault = vault_;
+    }
+
+    receive() external payable {
+        if (attempted) return;
+        attempted = true;
+        try vault.claimWithdraw() {
+            reentrySucceeded = true;
+        } catch {
+            reentrySucceeded = false;
+        }
+    }
+
+    function depositToVault() external payable {
+        vault.deposit{value: msg.value}();
+    }
+
+    function requestVaultWithdraw(uint256 shares) external {
+        vault.requestWithdraw(shares);
+    }
+
+    function claimVaultWithdraw() external {
+        vault.claimWithdraw();
+    }
+
+    function sellSteadyToSelf(
+        EthOptionsFactory factory,
+        bytes32 seriesId,
+        SeriesExposureVault wrapper,
+        uint256 sharesIn,
+        uint256 minEthOut
+    ) external {
+        wrapper.share().approve(address(vault), sharesIn);
+        vault.sellSteady(factory, seriesId, wrapper, sharesIn, minEthOut, address(this));
+    }
+}
+
 contract EthLPVaultTest is VaultTestBase {
     EthLPVault internal vault;
     EthOptionsFactory internal factory;
@@ -296,6 +339,39 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(steadyShare.balanceOf(alice), 0);
         assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
         assertEq(vault.activeStrategyEth(), 0.997 ether);
+    }
+
+    function testProductSellBlocksWithdrawalClaimReentry() public {
+        _depositFromAlice(2 ether);
+        ReentrantClaimReceiver receiver = new ReentrantClaimReceiver(vault);
+        vm.deal(address(receiver), 1 ether);
+        receiver.depositToVault{value: 0.2 ether}();
+        receiver.requestVaultWithdraw(0.1 ether);
+
+        (uint256 requestedAssets,) = vault.withdrawalRequests(address(receiver));
+        assertEq(requestedAssets, 0.1 ether);
+        assertEq(vault.reservedEth(), 0.1 ether);
+
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: 0.2 ether}(factory, oldSeriesId, steady, 0, alice);
+        MintBurnToken steadyShare = steady.share();
+        vm.prank(alice);
+        steadyShare.transfer(address(receiver), sharesOut);
+
+        vm.warp(block.timestamp + 4 days);
+        receiver.sellSteadyToSelf(factory, oldSeriesId, steady, sharesOut, 0);
+
+        assertEq(receiver.attempted() ? 1 : 0, 1);
+        assertEq(receiver.reentrySucceeded() ? 1 : 0, 0);
+        (uint256 assetsAfterReentry,) = vault.withdrawalRequests(address(receiver));
+        assertEq(assetsAfterReentry, 0.1 ether);
+        assertEq(vault.reservedEth(), 0.1 ether);
+
+        uint256 balanceBeforeClaim = address(receiver).balance;
+        receiver.claimVaultWithdraw();
+        assertEq(address(receiver).balance, balanceBeforeClaim + 0.1 ether);
+        assertEq(vault.reservedEth(), 0);
     }
 
     function testUserCanBuyBoostedFromLpVaultWithEth() public {
