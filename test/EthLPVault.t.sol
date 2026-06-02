@@ -409,6 +409,71 @@ contract EthLPVaultTest is VaultTestBase {
         vault.buySteady{value: 0.4 ether}(factory, oldSeriesId, steady, 0, alice);
     }
 
+    function testVaultCanMergeAndCloseInventoryAfterSteadyProductRoundTrip() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, 0, alice);
+
+        MintBurnToken steadyShare = steady.share();
+        vm.prank(alice);
+        steadyShare.approve(address(vault), sharesOut);
+        vm.prank(alice);
+        vault.sellSteady(factory, oldSeriesId, steady, sharesOut, 0, alice);
+
+        assertEq(vault.strategyActive() ? 1 : 0, 1);
+        assertEq(vault.openInventorySeriesCount(), 1);
+        assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(oldN.balanceOf(address(vault)), 0.4985 ether);
+
+        vm.expectRevert(EthLPVault.InventoryOpen.selector);
+        vault.closeStrategy();
+
+        vault.mergeSeries(factory, oldSeriesId, 0.4985 ether);
+        assertEq(vault.openInventorySeriesCount(), 0);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(oldN.balanceOf(address(vault)), 0);
+
+        vault.closeStrategy();
+        assertEq(vault.strategyActive() ? 1 : 0, 0);
+        assertEq(vault.activeStrategyEth(), 0);
+        assertEq(vault.managedAssets(), 2.0029955 ether);
+    }
+
+    function testVaultCanMergeAndCloseInventoryAfterBoostedProductRoundTrip() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault boosted =
+            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0, alice);
+
+        MintBurnToken boostedShare = boosted.share();
+        vm.prank(alice);
+        boostedShare.approve(address(vault), sharesOut);
+        vm.prank(alice);
+        vault.sellBoosted(factory, oldSeriesId, boosted, sharesOut, 0, alice);
+
+        assertEq(vault.strategyActive() ? 1 : 0, 1);
+        assertEq(vault.openInventorySeriesCount(), 1);
+        assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(oldN.balanceOf(address(vault)), 0.4985 ether);
+
+        vm.expectRevert(EthLPVault.InventoryOpen.selector);
+        vault.closeStrategy();
+
+        vault.mergeSeries(factory, oldSeriesId, 0.4985 ether);
+        assertEq(vault.openInventorySeriesCount(), 0);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(oldN.balanceOf(address(vault)), 0);
+
+        vault.closeStrategy();
+        assertEq(vault.strategyActive() ? 1 : 0, 0);
+        assertEq(vault.activeStrategyEth(), 0);
+        assertEq(vault.managedAssets(), 2.0029955 ether);
+    }
+
     function testUserProductTradeRejectsWrongWrapperSide() public {
         _depositFromAlice(2 ether);
         SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
