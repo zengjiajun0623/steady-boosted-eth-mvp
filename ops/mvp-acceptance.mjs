@@ -19,6 +19,7 @@ const NODE_CHECKS = [
   "ops/keeper-runner.mjs",
   "ops/mainnet-oracle-preflight.mjs",
   "ops/mvp-acceptance.mjs",
+  "ops/no-admin-surface-check.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",
   "ops/solver-improvement-report.mjs",
@@ -251,6 +252,12 @@ function buildSteps(args) {
       command: "node",
       args: ["ops/frontend-live-surface-check.mjs"],
     });
+    steps.push({
+      area: "security",
+      name: "No-admin surface check",
+      command: "node",
+      args: ["ops/no-admin-surface-check.mjs"],
+    });
   }
 
   if (args.skipEconomic) {
@@ -448,6 +455,7 @@ function printReport(report) {
   console.log("- Rotation: historical 10 bps roll-cost gate plus a live 10 bps public roll smoke.");
   console.log("- Bootstrap: no-solver launch capacity gate with LP vault capital as the protocol liquidity engine.");
   console.log("- Decentralization: role-separated trader/LP/solver/keeper smoke, public scripts, readiness lens, 3-stable median settlement, and merge/redeem wiring.");
+  console.log("- No-admin posture: static guard against owner/admin/upgradability patterns plus guardian-zero auction deployments.");
   console.log("");
 
   for (const result of report.results) {

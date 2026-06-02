@@ -112,7 +112,9 @@ Use this path when showing the MVP to a teammate:
 The demo is ready to show when `node ops/mvp-acceptance.mjs --local-live`
 passes. That gate proves the user-facing trade flow, LP vault flow, public
 solver roll path, no-solver vault bootstrap path, settlement runner, and
-readiness checks on a fresh local deployment.
+readiness checks on a fresh local deployment. It also runs a no-admin surface
+check that rejects common owner/admin/upgradability patterns and verifies
+RollAuction deployments use `guardian = address(0)`.
 
 ## Demo Evidence
 
