@@ -105,7 +105,8 @@ button:focus-visible {
   text-align: right;
 }
 
-#connectWallet {
+#connectWallet,
+#switchNetwork {
   min-height: 36px;
   padding: 0 12px;
   border: 1px solid rgba(13, 134, 127, 0.34);
@@ -116,7 +117,13 @@ button:focus-visible {
   font-weight: 950;
 }
 
-#connectWallet:disabled {
+#switchNetwork {
+  background: #ffffff;
+  color: var(--ink);
+}
+
+#connectWallet:disabled,
+#switchNetwork:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -1773,7 +1780,8 @@ body[data-product="boosted"] .sim-bar-row.is-selected {
     text-align: left;
   }
 
-  #connectWallet {
+  #connectWallet,
+  #switchNetwork {
     width: 100%;
   }
 

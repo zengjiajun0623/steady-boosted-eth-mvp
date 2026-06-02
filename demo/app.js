@@ -157,6 +157,7 @@ const els = {
   connectionStatus: document.querySelector("#connectionStatus"),
   contractNetwork: document.querySelector("#contractNetwork"),
   connectWallet: document.querySelector("#connectWallet"),
+  switchNetwork: document.querySelector("#switchNetwork"),
   audienceTabs: document.querySelectorAll(".audience-tab"),
   pages: {
     trader: document.querySelector("#traderPage"),
@@ -1506,6 +1507,32 @@ async function connectWallet() {
   scheduleOnchainRefresh({ includeQuote: true, force: true });
 }
 
+async function switchWalletNetwork() {
+  const ethereum = window.ethereum;
+  const expected = manifestChainId();
+  if (!ethereum || !expected) {
+    els.connectionStatus.textContent = "Connect a wallet and load a deployed manifest first.";
+    return;
+  }
+
+  els.switchNetwork.disabled = true;
+  try {
+    await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: expected }] });
+    state.contracts.chainId = await ethereum.request({ method: "eth_chainId" });
+    renderConnectionStatus();
+    render();
+    scheduleOnchainRefresh({ includeQuote: true, force: true });
+  } catch (error) {
+    els.connectionStatus.textContent =
+      error?.code === 4902
+        ? `Add ${chainLabel(expected)} in your wallet, then switch networks.`
+        : `Network switch cancelled. Switch to ${chainLabel(expected)}.`;
+    console.error(error);
+  } finally {
+    els.switchNetwork.disabled = false;
+  }
+}
+
 async function sendTransaction(tx) {
   if (!state.contracts.account || !window.ethereum) throw new Error("Wallet not connected");
   if (walletChainMismatch()) throw new Error(chainMismatchText());
@@ -1540,6 +1567,8 @@ function renderConnectionStatus() {
     expected && actual && expected !== actual
       ? `${chainLabel(actual)} / needs ${chainLabel(expected)}`
       : chainLabel(actual || expected);
+  els.switchNetwork.hidden = !Boolean(connected && hasManifest && walletChainMismatch());
+  els.switchNetwork.disabled = !state.contracts.walletAvailable;
   els.connectWallet.textContent = connected ? shortAddress(state.contracts.account) : "Connect wallet";
   els.connectWallet.disabled = !state.contracts.walletAvailable;
 }
@@ -3158,6 +3187,13 @@ function bindEvents() {
   els.connectWallet.addEventListener("click", () => {
     connectWallet().catch((error) => {
       els.connectionStatus.textContent = "Wallet connection cancelled";
+      console.error(error);
+    });
+  });
+
+  els.switchNetwork.addEventListener("click", () => {
+    switchWalletNetwork().catch((error) => {
+      els.connectionStatus.textContent = "Network switch cancelled";
       console.error(error);
     });
   });

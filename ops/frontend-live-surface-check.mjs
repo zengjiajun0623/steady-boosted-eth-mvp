@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 
 const REQUIRED_DOM_IDS = [
   "connectWallet",
+  "switchNetwork",
   "tradeAction",
   "lpAction",
   "lpClaimAction",
@@ -29,7 +30,13 @@ const APP_REQUIREMENTS = [
   {
     area: "wallet",
     name: "wallet connection",
-    patterns: ["eth_requestAccounts", "eth_sendTransaction", "accountsChanged", "chainChanged"],
+    patterns: [
+      "eth_requestAccounts",
+      "eth_sendTransaction",
+      "wallet_switchEthereumChain",
+      "accountsChanged",
+      "chainChanged",
+    ],
   },
   {
     area: "wallet",
@@ -41,6 +48,7 @@ const APP_REQUIREMENTS = [
       "walletChainMatchesManifest",
       "walletChainMismatch",
       "chainMismatchText",
+      "switchWalletNetwork",
       "if (walletChainMismatch()) throw new Error(chainMismatchText())",
     ],
   },
@@ -136,6 +144,7 @@ const APP_REQUIREMENTS = [
 
 const EVENT_REQUIREMENTS = [
   ["tradeAction", "submitOnchainTrade"],
+  ["switchNetwork", "switchWalletNetwork"],
   ["lpConfirmDeposit", "submitOnchainLpDeposit"],
   ["lpConfirmDeposit", "submitOnchainLpWithdraw"],
   ["lpClaimAction", "submitOnchainLpClaim"],
