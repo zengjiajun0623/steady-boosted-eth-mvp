@@ -38,12 +38,12 @@ function minBigInt(...values) {
 const input = JSON.parse(await readStdin());
 const currentPriceWad = BigInt(input.auction.currentPriceWad);
 const remainingSellAmount = BigInt(input.auction.remainingSellAmount);
-const operatorMaxPriceWad = BigInt(input.limits.operatorMaxPriceWad);
+const runnerMaxPriceWad = BigInt(input.limits.runnerMaxPriceWad);
 const defaultSellAmount = BigInt(input.limits.defaultSellAmount);
 const edgeBps = envInt("SOLVER_EDGE_BPS", 25);
 const fairRollPriceWad = BigInt(process.env.SOLVER_FAIR_PRICE_WAD || WAD.toString());
 const edgePriceWad = fairRollPriceWad - (fairRollPriceWad * BigInt(edgeBps)) / 10_000n;
-const maxPriceWad = edgePriceWad < operatorMaxPriceWad ? edgePriceWad : operatorMaxPriceWad;
+const maxPriceWad = edgePriceWad < runnerMaxPriceWad ? edgePriceWad : runnerMaxPriceWad;
 const envMaxFill = process.env.SOLVER_MAX_FILL_ETH ? ethToWei(process.env.SOLVER_MAX_FILL_ETH) : defaultSellAmount;
 const sellAmountWei = minBigInt(defaultSellAmount, envMaxFill, remainingSellAmount);
 const bid = currentPriceWad <= maxPriceWad && sellAmountWei > 0n;

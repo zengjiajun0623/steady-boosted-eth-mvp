@@ -10,6 +10,7 @@ const DECISIONS_SCRIPT = path.join(SCRIPT_DIR, "keeper-decisions.mjs");
 const ACTION_ALIASES = {
   all: ["*"],
   solver: ["solver-bid"],
+  settlement: ["settle-series"],
   wrapper: ["wrapper-start-roll", "wrapper-finalize-roll", "wrapper-reset-roll", "wrapper-cancel-roll"],
   lp: ["lp-backstop-bid", "lp-inventory-merge", "lp-inventory-redeem", "lp-inventory-sell", "lp-inventory-close"],
   vault: ["lp-backstop-bid", "lp-inventory-merge", "lp-inventory-redeem", "lp-inventory-sell", "lp-inventory-close"],
@@ -23,13 +24,14 @@ function usage() {
 Runner options:
   --execute                 Send ready transactions. Default is dry-run.
   --action <type|alias>      Action type to run. Repeatable or comma-separated.
-                             Aliases: solver, wrapper, lp, vault, inventory, all.
+                             Aliases: solver, settlement, wrapper, lp, vault, inventory, all.
   --max-actions <n>          Max ready actions per pass. Default: 1 in execute mode, all in dry-run.
   --interval <seconds>       Repeat forever with this delay. Default: run once.
   --private-key-env <name>   Override all role-specific key env vars.
 
-Role key env vars:
+Action key env vars:
   Solver actions prefer SOLVER_PRIVATE_KEY, then PRIVATE_KEY.
+  Settlement actions prefer SETTLEMENT_RUNNER_PRIVATE_KEY, then PRIVATE_KEY.
   Wrapper actions prefer WRAPPER_KEEPER_PRIVATE_KEY, then PRIVATE_KEY.
   LP backstop actions prefer LP_KEEPER_PRIVATE_KEY, then PRIVATE_KEY.
   LP inventory cleanup prefers INVENTORY_KEEPER_PRIVATE_KEY, LP_KEEPER_PRIVATE_KEY, then PRIVATE_KEY.
@@ -49,6 +51,7 @@ Decision options are passed to keeper-decisions.mjs, for example:
 
 Examples:
   node ops/keeper-runner.mjs --rpc http://127.0.0.1:8545 --action wrapper
+  SETTLEMENT_RUNNER_PRIVATE_KEY=0x... node ops/keeper-runner.mjs --execute --action settlement --rpc $RPC_URL
   SOLVER_PRIVATE_KEY=0x... node ops/keeper-runner.mjs --execute --action solver --rpc $RPC_URL --recipient 0x... --max-price-wad 999000000000000000 --solver-model ops/solver-model-spread.mjs
   node ops/keeper-runner.mjs --execute --action lp-inventory-sell --interval 30 --rpc $RPC_URL`;
 }
@@ -114,6 +117,7 @@ function selectedAction(type, selected) {
 
 export function actionRole(type) {
   if (type === "solver-bid") return "solver";
+  if (type === "settle-series") return "settlement";
   if (type.startsWith("wrapper-")) return "wrapper";
   if (type === "lp-backstop-bid") return "lp";
   if (type.startsWith("lp-inventory-")) return "inventory";
@@ -125,6 +129,7 @@ export function privateKeyEnvCandidates(action, runnerArgs) {
 
   const byRole = {
     solver: ["SOLVER_PRIVATE_KEY", "PRIVATE_KEY"],
+    settlement: ["SETTLEMENT_RUNNER_PRIVATE_KEY", "PRIVATE_KEY"],
     wrapper: ["WRAPPER_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],
     lp: ["LP_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],
     inventory: ["INVENTORY_KEEPER_PRIVATE_KEY", "LP_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],

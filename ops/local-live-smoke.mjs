@@ -692,8 +692,17 @@ async function runLiveSmoke(args) {
       "setSettlementPrice(bytes32,uint256)",
       [series.secondSeriesId, STRIKE_PRICE_WAD],
     );
-    await castSend(rpcUrl, args.keeperPrivateKey, contracts.factory, "settle(bytes32)", [series.firstSeriesId]);
-    await castSend(rpcUrl, args.keeperPrivateKey, contracts.factory, "settle(bytes32)", [series.secondSeriesId]);
+    await runKeeperRunner({
+      rpcUrl,
+      manifestPath,
+      action: "settlement",
+      maxActions: 2,
+      env: { SETTLEMENT_RUNNER_PRIVATE_KEY: args.keeperPrivateKey },
+    });
+    record("Public settlement runner settled matured series", {
+      firstSeriesId: series.firstSeriesId,
+      secondSeriesId: series.secondSeriesId,
+    });
 
     await runKeeperRunner({
       rpcUrl,

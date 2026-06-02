@@ -454,9 +454,10 @@ aggregator, or LP strategy can call.
 `ops/keeper-decisions.mjs` exposes the same idea operationally: it reads public
 state and emits ready actions plus structured transaction metadata. The optional
 `ops/keeper-runner.mjs` script can dry-run or execute a chosen action scope
-(`solver`, `wrapper`, `lp`, or a specific action type). This gives the MVP a
-simple backend loop without adding a trusted backend: anyone can run the same
-loop, compete on fills, and audit the commands before execution.
+(`solver`, `settlement`, `wrapper`, `lp`, or a specific action type). This gives
+the MVP a simple backend loop without adding a trusted backend: anyone can run
+the same loop, compete on fills, settle mature series when the oracle is ready,
+and audit the commands before execution.
 
 The helper also attaches the deterministic vault strategy plan to each live
 roll auction. ETH LP vault backstop actions are gated by that plan by default:
@@ -473,9 +474,10 @@ reward contract yet; it is the transparent accounting layer needed before a
 solver incentive program.
 
 For parallel execution, the runner supports action-scoped key environment
-variables. Solver, wrapper-maintenance, LP backstop, and inventory-unwind loops
-can run as separate processes with separate keys, avoiding a shared nonce stream
-while still reading the same public contract state.
+variables. Solver, settlement, wrapper-maintenance, LP backstop, and
+inventory-unwind loops can run as separate processes with separate keys,
+avoiding a shared nonce stream while still reading the same public contract
+state.
 
 ### Settlement Oracles
 
@@ -544,6 +546,7 @@ The demo includes the direct holder maturity path:
 read factory series maturity / settled state / settlement price
 show the connected wallet's direct P or N token balance
 anyone can call settle(seriesId) after maturity
+keeper-decisions surfaces settle-series once the oracle reports a nonzero price
 holders can redeemP or redeemN after settlement
 matched P+N holders can merge back to ETH until settlement, even after maturity
 ```

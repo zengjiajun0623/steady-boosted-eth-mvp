@@ -335,6 +335,7 @@ prints suggested `cast send` commands for:
 
 ```text
 solver RollSolver.mintAndFillWithCallback / mintAndFillNWithCallback bids
+settle mature factory series when the settlement oracle is ready
 ETH LP vault backstop bids through EthLPVaultKeeper
 ETH LP vault matched-inventory merges through EthLPVaultKeeper
 ETH LP vault settled-inventory redeems through EthLPVaultKeeper
@@ -371,8 +372,10 @@ threshold, product roll-size cap, global active-auction ceiling, or wrapper
 seller's active-auction ceiling. LP backstop actions are also marked not ready if
 the auction is too close to expiry, too far down the Dutch curve, above the LP
 max roll price, inside the solver-first delay window, or above the LP vault's
-remaining strategy capacity. It does not send transactions by itself; it is an
-open decision layer that anyone can run and audit.
+remaining strategy capacity. Settlement actions are marked ready only after the
+series has matured and its oracle returns a nonzero settlement price. It does
+not send transactions by itself; it is an open decision layer that anyone can
+run and audit.
 
 The helper also runs `ops/vault-strategy-plan.mjs` for each live roll auction.
 By default, the LP backstop suggestion is blocked if the strategy plan fails:
@@ -580,6 +583,7 @@ solver, wrapper, and LP loops do not share nonce state:
 
 ```text
 solver actions: SOLVER_PRIVATE_KEY, fallback PRIVATE_KEY
+settlement actions: SETTLEMENT_RUNNER_PRIVATE_KEY, fallback PRIVATE_KEY
 wrapper actions: WRAPPER_KEEPER_PRIVATE_KEY, fallback PRIVATE_KEY
 LP backstop actions: LP_KEEPER_PRIVATE_KEY, fallback PRIVATE_KEY
 LP inventory unwind: INVENTORY_KEEPER_PRIVATE_KEY, LP_KEEPER_PRIVATE_KEY, fallback PRIVATE_KEY
@@ -599,6 +603,14 @@ SOLVER_PRIVATE_KEY=<SOLVER_PRIVATE_KEY> node ops/keeper-runner.mjs \
   --max-price-wad 1000000000000000000 \
   --max-fill-eth 0.25 \
   --solver-model ops/solver-model-spread.mjs
+
+# Settlement runner: settle mature series only after the oracle is ready.
+SETTLEMENT_RUNNER_PRIVATE_KEY=<SETTLEMENT_RUNNER_PRIVATE_KEY> node ops/keeper-runner.mjs \
+  --execute \
+  --action settlement \
+  --interval 30 \
+  --manifest demo/contract-manifest.json \
+  --rpc <RPC_URL>
 
 # Wrapper keeper: maintain product rolls.
 WRAPPER_KEEPER_PRIVATE_KEY=<WRAPPER_KEEPER_PRIVATE_KEY> node ops/keeper-runner.mjs \

@@ -24,6 +24,7 @@ const SELECTORS = {
   auctions: "0x571a26a0",
   balanceOf: "0x70a08231",
   factorySeries: "0xf5de118e",
+  oracleSettlementPrice: "0x0a7649cc",
   keeperCurrentSeriesId: "0xc9777451",
   keeperPendingSeriesId: "0xe2f6f51a",
   keeperMaxRollSellAmount: "0x7312fcea",
@@ -191,6 +192,10 @@ function isAddress(value) {
 
 function isBytes32(value) {
   return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function isZeroBytes32(value) {
+  return isBytes32(value) && /^0x0{64}$/i.test(value);
 }
 
 function sameAddress(a, b) {
@@ -602,7 +607,7 @@ function solverModelInput(manifest, wrapper, auction, args, auctionStoppedLevel,
       solverMethod: wrapper.solverMethod,
     },
     limits: {
-      operatorMaxPriceWad: args.maxPriceWad.toString(),
+      runnerMaxPriceWad: args.maxPriceWad.toString(),
       defaultSellAmount: defaultSellAmount.toString(),
       defaultMaxFillWei: args.maxFillWei === null ? null : args.maxFillWei.toString(),
       auctionMinSellAmount: auctionMinSellAmount.toString(),
@@ -798,6 +803,100 @@ function lpInventoryRedeemTx(manifest, item, amount) {
 
 function lpInventoryCloseTx(manifest) {
   return txSpec(manifest.contracts.lpKeeper, "closeStrategy()");
+}
+
+function settlementTx(manifest, seriesId) {
+  return txSpec(manifest.contracts.factory, "settle(bytes32)", [seriesId]);
+}
+
+function manifestSeriesConfigs(manifest) {
+  const series = manifest.series || {};
+  return [
+    { seriesId: series.firstSeriesId },
+    { seriesId: series.secondSeriesId },
+  ].filter((item) => isBytes32(item.seriesId) && !isZeroBytes32(item.seriesId));
+}
+
+function knownSettlementSeries(manifest, inventory) {
+  const byId = new Map();
+  for (const item of manifestSeriesConfigs(manifest)) {
+    byId.set(item.seriesId.toLowerCase(), item);
+  }
+  for (const item of inventory) {
+    if (!isBytes32(item.seriesId) || isZeroBytes32(item.seriesId)) continue;
+    const key = item.seriesId.toLowerCase();
+    if (!byId.has(key)) {
+      byId.set(key, { seriesId: item.seriesId });
+    }
+  }
+  return [...byId.values()];
+}
+
+async function readFactorySeriesState(rpcUrl, factory, seriesId) {
+  const raw = await ethCall(rpcUrl, factory, `${SELECTORS.factorySeries}${bytes32Word(seriesId)}`);
+  return {
+    seriesId,
+    strike: decodeUint(raw, 0),
+    maturity: decodeUint(raw, 1),
+    twapWindow: decodeUint(raw, 2),
+    capEth: decodeUint(raw, 3),
+    openInterestEth: decodeUint(raw, 4),
+    collateralEth: decodeUint(raw, 5),
+    pToken: decodeAddress(raw, 6),
+    nToken: decodeAddress(raw, 7),
+    oracle: decodeAddress(raw, 8),
+    settled: decodeBool(raw, 9),
+    settlementPrice: decodeUint(raw, 10),
+  };
+}
+
+async function readOracleSettlementQuote(rpcUrl, oracle, seriesId) {
+  if (!isAddress(oracle)) return { ready: false, price: 0n };
+
+  try {
+    const raw = await ethCall(rpcUrl, oracle, `${SELECTORS.oracleSettlementPrice}${bytes32Word(seriesId)}`);
+    return {
+      ready: decodeBool(raw, 0),
+      price: decodeUint(raw, 1),
+    };
+  } catch {
+    return {
+      ready: false,
+      price: 0n,
+    };
+  }
+}
+
+async function buildSettlementActions(rpcUrl, manifest, inventory) {
+  const actions = [];
+  const factory = manifest.contracts?.factory;
+  if (!isAddress(factory)) return actions;
+
+  const now = await latestBlockTimestamp(rpcUrl);
+  for (const item of knownSettlementSeries(manifest, inventory)) {
+    const state = await readFactorySeriesState(rpcUrl, factory, item.seriesId);
+    const matured = now >= state.maturity;
+    if (state.settled || !matured) continue;
+
+    const oracleQuote = await readOracleSettlementQuote(rpcUrl, state.oracle, item.seriesId);
+    if (!oracleQuote.ready || oracleQuote.price === 0n) continue;
+
+    const actionTx = settlementTx(manifest, item.seriesId);
+    actions.push({
+      type: "settle-series",
+      product: "Settlement",
+      ready: true,
+      reason: "Series is mature and the settlement oracle is ready; anyone can settle it.",
+      seriesId: item.seriesId,
+      maturity: state.maturity.toString(),
+      oracle: state.oracle,
+      oraclePrice: oracleQuote.price.toString(),
+      tx: actionTx,
+      command: commandFromTx(actionTx),
+    });
+  }
+
+  return actions;
 }
 
 async function readLpInventoryState(rpcUrl, manifest) {
@@ -1395,6 +1494,7 @@ async function main() {
   const lpInventory = await readLpInventoryState(args.rpc, manifest);
   const actions = [
     ...buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedLevel, auctionMinSellAmount, lpPolicy),
+    ...(await buildSettlementActions(args.rpc, manifest, lpInventory)),
     ...(await buildLpInventoryActions(args.rpc, manifest, lpInventory, args, lpPolicy)),
     ...(await buildWrapperMaintenanceActions(
       args.rpc,
@@ -1447,6 +1547,7 @@ async function main() {
     if (action.reason) console.log(`Reason: ${action.reason}`);
     if (action.condition) console.log(`Condition: ${action.condition}`);
     if (action.auctionId !== undefined) console.log(`Auction: ${action.auctionId.toString()}`);
+    if (action.seriesId) console.log(`Series: ${action.seriesId}`);
     if (action.token) console.log(`Token: ${action.token}`);
     if (action.market) console.log(`Market: ${action.market}`);
     if (action.suggestedFill) console.log(`Suggested fill: ${action.suggestedFill}`);

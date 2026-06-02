@@ -164,13 +164,13 @@ EthereumMainnetOracleConfig for bounded Ethereum mainnet pool configuration
 MockSettlementOracle for local deterministic tests
 ```
 
-Verification, keeper, and solver scripts:
+Verification, keeper, settlement, and solver scripts:
 
 ```text
 ops/mvp-acceptance.mjs             full local/live acceptance gate
 ops/readiness-check.mjs            live manifest readiness gate
 ops/local-live-smoke.mjs           fresh Anvil trader/LP/solver/keeper proof
-ops/keeper-decisions.mjs           public-state keeper/solver suggestions
+ops/keeper-decisions.mjs           public-state settlement/keeper/solver suggestions
 ops/keeper-runner.mjs              optional action-scoped transaction runner
 ops/solver-improvement-report.mjs  public solver-vault fill attribution
 ops/vault-strategy-plan.mjs        deterministic LP vault action planner
@@ -262,6 +262,9 @@ node ops/keeper-runner.mjs \
   --recipient <ADDRESS> \
   --solver-model ops/solver-model-spread.mjs
 
+# Settlement bot: settle mature series when the oracle is ready.
+node ops/keeper-runner.mjs --rpc <RPC_URL> --action settlement
+
 # Wrapper keeper bot: start/finalize/reset/cancel validated wrapper rolls.
 node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper
 
@@ -272,10 +275,11 @@ node ops/keeper-runner.mjs \
   --strategy-no-solver-launch
 ```
 
-Add `--execute` only after setting the key for that role:
+Add `--execute` only after setting the key for that action scope:
 
 ```text
 SOLVER_PRIVATE_KEY
+SETTLEMENT_RUNNER_PRIVATE_KEY
 WRAPPER_KEEPER_PRIVATE_KEY
 LP_KEEPER_PRIVATE_KEY
 ```
