@@ -13,6 +13,7 @@ const NODE_CHECKS = [
   "demo/app.js",
   "ops/deploy-local-demo.mjs",
   "ops/export-manifest.mjs",
+  "ops/frontend-live-surface-check.mjs",
   "ops/keeper-decisions.mjs",
   "ops/keeper-runner.mjs",
   "ops/mvp-acceptance.mjs",
@@ -211,6 +212,12 @@ function buildSteps(args) {
       command: "python3",
       args: ["-m", "py_compile", ...PYTHON_CHECKS],
     });
+    steps.push({
+      area: "demo",
+      name: "Frontend live wallet surface",
+      command: "node",
+      args: ["ops/frontend-live-surface-check.mjs"],
+    });
   }
 
   if (args.skipEconomic) {
@@ -401,6 +408,7 @@ function printReport(report) {
   console.log("");
   console.log("Covers:");
   console.log("- Trader: Steady/Boosted ETH buy/sell markets and demo trading surface.");
+  console.log("- Frontend: wallet-connected trader, LP, solver, keeper, and settlement action surface.");
   console.log("- LP: ETH vault deposit/withdraw, roll backstop, inventory cleanup, return check, and capacity policy.");
   console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and expensive-roll rejection.");
   console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, and keeper discovery.");

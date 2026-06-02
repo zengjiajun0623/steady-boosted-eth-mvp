@@ -57,6 +57,8 @@ These are product invariants, not preferences.
 ```text
 1. Trader UX is ETH native.
    Users buy and sell Steady ETH / Boosted ETH with ETH by default.
+   The browser demo should keep wallet-connected buy/sell actions available
+   when a deployed manifest is loaded.
 
 2. Normal rolls stay cheap.
    The default normal roll target is <= 10 bps. If cheap rolls cannot clear,
@@ -158,8 +160,10 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
 4. Frontend wallet integration
 
-   Connect the demo trade and vault pages to live contract actions. Keep the
-   trader page simple: buy, sell, expected outcome, risk, and fee.
+   The demo has live wallet actions for trader buy/sell, LP deposit/withdraw/
+   claim, solver bids, wrapper keeper actions, and settlement actions. Next,
+   improve transaction receipts, network switching, and end-to-end browser tests
+   against a fresh local deployment.
 
 5. Security and audit prep
 
