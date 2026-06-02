@@ -19,6 +19,7 @@ const NODE_CHECKS = [
   "ops/keeper-runner.mjs",
   "ops/mainnet-oracle-preflight.mjs",
   "ops/mvp-acceptance.mjs",
+  "ops/mvp-objective-audit.mjs",
   "ops/no-admin-surface-check.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",
@@ -258,6 +259,12 @@ function buildSteps(args) {
       command: "node",
       args: ["ops/no-admin-surface-check.mjs"],
     });
+    steps.push({
+      area: "objective",
+      name: "MVP objective audit",
+      command: "node",
+      args: ["ops/mvp-objective-audit.mjs"],
+    });
   }
 
   if (args.skipEconomic) {
@@ -456,6 +463,7 @@ function printReport(report) {
   console.log("- Bootstrap: no-solver launch capacity gate with LP vault capital as the protocol liquidity engine.");
   console.log("- Decentralization: role-separated trader/LP/solver/keeper smoke, public scripts, readiness lens, 3-stable median settlement, and merge/redeem wiring.");
   console.log("- No-admin posture: static guard against owner/admin/upgradability patterns plus guardian-zero auction deployments.");
+  console.log("- Objective audit: maps each original MVP requirement to concrete implementation, test, readiness, or documentation evidence.");
   console.log("");
 
   for (const result of report.results) {
