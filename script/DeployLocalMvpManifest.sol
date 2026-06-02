@@ -140,13 +140,38 @@ contract DeployLocalMvpManifest {
     }
 
     function _deployTopology() internal {
-        topology = new LocalMvpTopology();
-        topology.setCore(factory, oracle, rollAuction, rollSolver, lpKeeper, lpVault);
-        topology.setSeries(firstSeriesId, secondSeriesId, firstP, firstN, secondP, secondN);
-        topology.setProducts(steadyVault, boostedVault, steadyMarket, boostedMarket);
-        topology.setInventoryMarkets(firstPMarket, firstNMarket, secondPMarket, secondNMarket);
-        topology.setWrapperKeepers(steadyKeeper, boostedKeeper);
-        topology.setHealthLens(healthLens);
+        topology = new LocalMvpTopology(
+            LocalMvpTopology.CoreConfig({
+                factory: factory,
+                oracle: oracle,
+                rollAuction: rollAuction,
+                rollSolver: rollSolver,
+                lpKeeper: lpKeeper,
+                lpVault: lpVault
+            }),
+            LocalMvpTopology.SeriesConfig({
+                firstSeriesId: firstSeriesId,
+                secondSeriesId: secondSeriesId,
+                firstP: firstP,
+                firstN: firstN,
+                secondP: secondP,
+                secondN: secondN
+            }),
+            LocalMvpTopology.ProductConfig({
+                steadyVault: steadyVault,
+                boostedVault: boostedVault,
+                steadyMarket: steadyMarket,
+                boostedMarket: boostedMarket
+            }),
+            LocalMvpTopology.InventoryMarketConfig({
+                firstPMarket: firstPMarket,
+                firstNMarket: firstNMarket,
+                secondPMarket: secondPMarket,
+                secondNMarket: secondNMarket
+            }),
+            LocalMvpTopology.WrapperKeeperConfig({steadyKeeper: steadyKeeper, boostedKeeper: boostedKeeper}),
+            healthLens
+        );
     }
 
     function _tokens(bytes32 seriesId) internal view returns (MintBurnToken pToken, MintBurnToken nToken) {
@@ -154,9 +179,46 @@ contract DeployLocalMvpManifest {
     }
 }
 
-/// @notice Small address registry plus market seeding helper for directly
-/// deployed local MVP topologies.
+/// @notice Constructor-filled address registry plus market seeding helper for
+/// directly deployed local MVP topologies.
 contract LocalMvpTopology {
+    struct CoreConfig {
+        EthOptionsFactory factory;
+        MockSettlementOracle oracle;
+        RollAuction rollAuction;
+        RollSolver rollSolver;
+        EthLPVaultKeeper lpKeeper;
+        EthLPVault lpVault;
+    }
+
+    struct SeriesConfig {
+        bytes32 firstSeriesId;
+        bytes32 secondSeriesId;
+        MintBurnToken firstP;
+        MintBurnToken firstN;
+        MintBurnToken secondP;
+        MintBurnToken secondN;
+    }
+
+    struct ProductConfig {
+        SeriesExposureVault steadyVault;
+        SeriesExposureVault boostedVault;
+        EthTokenAMM steadyMarket;
+        EthTokenAMM boostedMarket;
+    }
+
+    struct InventoryMarketConfig {
+        EthTokenAMM firstPMarket;
+        EthTokenAMM firstNMarket;
+        EthTokenAMM secondPMarket;
+        EthTokenAMM secondNMarket;
+    }
+
+    struct WrapperKeeperConfig {
+        SeriesExposureVaultKeeper steadyKeeper;
+        SeriesExposureVaultKeeper boostedKeeper;
+    }
+
     event CoreRegistered(
         address indexed factory,
         address indexed rollAuction,
@@ -197,13 +259,11 @@ contract LocalMvpTopology {
     );
 
     error InvalidConfig();
-    error NotOwner();
     error NothingDeployed();
     error InsufficientEth();
     error EthTransferFailed();
     error TransferFailed();
 
-    address public immutable owner;
     EthOptionsFactory private storedFactory;
     MockSettlementOracle private storedOracle;
     RollAuction private storedRollAuction;
@@ -228,109 +288,71 @@ contract LocalMvpTopology {
     MintBurnToken private storedSecondP;
     MintBurnToken private storedSecondN;
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
-        _;
-    }
+    constructor(
+        CoreConfig memory core_,
+        SeriesConfig memory series_,
+        ProductConfig memory products_,
+        InventoryMarketConfig memory inventory_,
+        WrapperKeeperConfig memory keepers_,
+        ProtocolHealthLens healthLens_
+    ) {
+        storedFactory = core_.factory;
+        storedOracle = core_.oracle;
+        storedRollAuction = core_.rollAuction;
+        storedRollSolver = core_.rollSolver;
+        storedLpKeeper = core_.lpKeeper;
+        storedLpVault = core_.lpVault;
+        storedFirstSeriesId = series_.firstSeriesId;
+        storedSecondSeriesId = series_.secondSeriesId;
+        storedFirstP = series_.firstP;
+        storedFirstN = series_.firstN;
+        storedSecondP = series_.secondP;
+        storedSecondN = series_.secondN;
+        storedSteadyVault = products_.steadyVault;
+        storedBoostedVault = products_.boostedVault;
+        storedSteadyMarket = products_.steadyMarket;
+        storedBoostedMarket = products_.boostedMarket;
+        storedFirstPMarket = inventory_.firstPMarket;
+        storedFirstNMarket = inventory_.firstNMarket;
+        storedSecondPMarket = inventory_.secondPMarket;
+        storedSecondNMarket = inventory_.secondNMarket;
+        storedSteadyKeeper = keepers_.steadyKeeper;
+        storedBoostedKeeper = keepers_.boostedKeeper;
+        storedHealthLens = healthLens_;
 
-    constructor() {
-        owner = msg.sender;
+        emit CoreRegistered(
+            address(core_.factory),
+            address(core_.rollAuction),
+            address(core_.lpVault),
+            address(core_.oracle),
+            address(core_.rollSolver),
+            address(core_.lpKeeper)
+        );
+        emit SeriesRegistered(
+            series_.firstSeriesId,
+            series_.secondSeriesId,
+            address(series_.firstP),
+            address(series_.firstN),
+            address(series_.secondP),
+            address(series_.secondN)
+        );
+        emit ProductsRegistered(
+            address(products_.steadyVault),
+            address(products_.boostedVault),
+            address(products_.steadyMarket),
+            address(products_.boostedMarket)
+        );
+        emit InventoryMarketsRegistered(
+            address(inventory_.firstPMarket),
+            address(inventory_.firstNMarket),
+            address(inventory_.secondPMarket),
+            address(inventory_.secondNMarket)
+        );
+        emit WrapperKeepersRegistered(address(keepers_.steadyKeeper), address(keepers_.boostedKeeper));
+        emit HealthLensRegistered(address(healthLens_));
     }
 
     receive() external payable {}
-
-    function setCore(
-        EthOptionsFactory factory,
-        MockSettlementOracle oracle,
-        RollAuction rollAuction,
-        RollSolver rollSolver,
-        EthLPVaultKeeper lpKeeper,
-        EthLPVault lpVault
-    ) external onlyOwner {
-        storedFactory = factory;
-        storedOracle = oracle;
-        storedRollAuction = rollAuction;
-        storedRollSolver = rollSolver;
-        storedLpKeeper = lpKeeper;
-        storedLpVault = lpVault;
-
-        emit CoreRegistered(
-            address(factory),
-            address(rollAuction),
-            address(lpVault),
-            address(oracle),
-            address(rollSolver),
-            address(lpKeeper)
-        );
-    }
-
-    function setSeries(
-        bytes32 firstSeriesId,
-        bytes32 secondSeriesId,
-        MintBurnToken firstP,
-        MintBurnToken firstN,
-        MintBurnToken secondP,
-        MintBurnToken secondN
-    ) external onlyOwner {
-        storedFirstSeriesId = firstSeriesId;
-        storedSecondSeriesId = secondSeriesId;
-        storedFirstP = firstP;
-        storedFirstN = firstN;
-        storedSecondP = secondP;
-        storedSecondN = secondN;
-
-        emit SeriesRegistered(
-            firstSeriesId, secondSeriesId, address(firstP), address(firstN), address(secondP), address(secondN)
-        );
-    }
-
-    function setProducts(
-        SeriesExposureVault steadyVault,
-        SeriesExposureVault boostedVault,
-        EthTokenAMM steadyMarket,
-        EthTokenAMM boostedMarket
-    ) external onlyOwner {
-        storedSteadyVault = steadyVault;
-        storedBoostedVault = boostedVault;
-        storedSteadyMarket = steadyMarket;
-        storedBoostedMarket = boostedMarket;
-
-        emit ProductsRegistered(
-            address(steadyVault), address(boostedVault), address(steadyMarket), address(boostedMarket)
-        );
-    }
-
-    function setInventoryMarkets(
-        EthTokenAMM firstPMarket,
-        EthTokenAMM firstNMarket,
-        EthTokenAMM secondPMarket,
-        EthTokenAMM secondNMarket
-    ) external onlyOwner {
-        storedFirstPMarket = firstPMarket;
-        storedFirstNMarket = firstNMarket;
-        storedSecondPMarket = secondPMarket;
-        storedSecondNMarket = secondNMarket;
-
-        emit InventoryMarketsRegistered(
-            address(firstPMarket), address(firstNMarket), address(secondPMarket), address(secondNMarket)
-        );
-    }
-
-    function setWrapperKeepers(SeriesExposureVaultKeeper steadyKeeper, SeriesExposureVaultKeeper boostedKeeper)
-        external
-        onlyOwner
-    {
-        storedSteadyKeeper = steadyKeeper;
-        storedBoostedKeeper = boostedKeeper;
-
-        emit WrapperKeepersRegistered(address(steadyKeeper), address(boostedKeeper));
-    }
-
-    function setHealthLens(ProtocolHealthLens lens) external onlyOwner {
-        storedHealthLens = lens;
-
-        emit HealthLensRegistered(address(lens));
-    }
 
     function seedMarkets(
         uint256 steadyShares,

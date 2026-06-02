@@ -184,6 +184,9 @@ ops/mainnet-oracle-preflight.mjs   Ethereum mainnet oracle pool preflight
 For a local live demo on Anvil, deploy direct components, export the manifest,
 and seed markets with:
 
+The local topology helper is constructor-filled deployment metadata. It is only
+used to export demo addresses and seed demo AMMs.
+
 ```bash
 PRIVATE_KEY=<PRIVATE_KEY> node ops/deploy-local-demo.mjs \
   --rpc http://127.0.0.1:8545

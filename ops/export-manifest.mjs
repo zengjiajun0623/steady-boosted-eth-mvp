@@ -15,22 +15,22 @@ const SELECTORS = {
 
 function usage() {
   return `Usage:
-  node ops/export-manifest.mjs --rpc <RPC_URL> --deployer <TOPOLOGY_ADDRESS> [options]
+  node ops/export-manifest.mjs --rpc <RPC_URL> --topology <TOPOLOGY_ADDRESS> [options]
 
 Options:
-  --topology <address>  Alias for --deployer
+  --topology <address>  Topology helper address
   --out <path>       Output manifest path (default: ${DEFAULT_OUT})
   --stdout           Print manifest JSON instead of writing a file
   --mode <name>      Manifest mode label (default: live)
 
 Example:
-  node ops/export-manifest.mjs --rpc http://127.0.0.1:8545 --deployer 0x... --out demo/contract-manifest.json`;
+  node ops/export-manifest.mjs --rpc http://127.0.0.1:8545 --topology 0x... --out demo/contract-manifest.json`;
 }
 
 function parseArgs(argv) {
   const args = {
     rpc: process.env.RPC_URL || "",
-    deployer: "",
+    topology: "",
     out: DEFAULT_OUT,
     stdout: false,
     mode: "live",
@@ -49,10 +49,8 @@ function parseArgs(argv) {
       process.exit(0);
     } else if (arg === "--rpc") {
       args.rpc = next();
-    } else if (arg === "--deployer") {
-      args.deployer = next();
     } else if (arg === "--topology") {
-      args.deployer = next();
+      args.topology = next();
     } else if (arg === "--out") {
       args.out = next();
     } else if (arg === "--stdout") {
@@ -99,18 +97,18 @@ async function rpcCall(rpcUrl, method, params) {
 }
 
 async function ethCall(rpcUrl, to, data) {
-  if (!isAddress(to)) throw new Error(`Invalid deployer address: ${to}`);
+  if (!isAddress(to)) throw new Error(`Invalid topology address: ${to}`);
   return rpcCall(rpcUrl, "eth_call", [{ to, data }, "latest"]);
 }
 
-async function readTopology(rpcUrl, deployer) {
+async function readTopology(rpcUrl, topologyAddress) {
   const [core, products, keepers, inventoryMarkets, healthLens, series] = await Promise.all([
-    ethCall(rpcUrl, deployer, SELECTORS.core),
-    ethCall(rpcUrl, deployer, SELECTORS.products),
-    ethCall(rpcUrl, deployer, SELECTORS.wrapperKeepers),
-    ethCall(rpcUrl, deployer, SELECTORS.inventoryMarkets).catch(() => null),
-    ethCall(rpcUrl, deployer, SELECTORS.healthLens),
-    ethCall(rpcUrl, deployer, SELECTORS.series),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.core),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.products),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.wrapperKeepers),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.inventoryMarkets).catch(() => null),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.healthLens),
+    ethCall(rpcUrl, topologyAddress, SELECTORS.series),
   ]);
 
   return {
@@ -191,12 +189,12 @@ function buildManifest({ mode, chainIdHex, topology }) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.rpc || !isAddress(args.deployer)) {
+  if (!args.rpc || !isAddress(args.topology)) {
     console.error(usage());
     process.exit(1);
   }
 
-  const [chainIdHex, topology] = await Promise.all([chainId(args.rpc), readTopology(args.rpc, args.deployer)]);
+  const [chainIdHex, topology] = await Promise.all([chainId(args.rpc), readTopology(args.rpc, args.topology)]);
   const manifest = buildManifest({ mode: args.mode, chainIdHex, topology });
   const json = `${JSON.stringify(manifest, null, 2)}\n`;
 
