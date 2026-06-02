@@ -340,6 +340,75 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(vault.activeStrategyEth(), 0.997 ether);
     }
 
+    function testVaultBackedProductQuotesMatchExecution() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+        SeriesExposureVault boosted =
+            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        uint256 steadyBuyQuote = vault.quoteBuyProduct(steady, 0.5 ether);
+        uint256 boostedBuyQuote = vault.quoteBuyProduct(boosted, 0.25 ether);
+        assertEq(steadyBuyQuote, 0.4985 ether);
+        assertEq(boostedBuyQuote, 0.24925 ether);
+
+        vm.prank(alice);
+        uint256 steadyShares = vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, steadyBuyQuote, alice);
+        vm.prank(alice);
+        uint256 boostedShares =
+            vault.buyBoosted{value: 0.25 ether}(factory, oldSeriesId, boosted, boostedBuyQuote, alice);
+
+        assertEq(steadyShares, steadyBuyQuote);
+        assertEq(boostedShares, boostedBuyQuote);
+
+        (uint256 steadyEthOut, uint256 steadyFeeEth, uint256 steadyProductAmount) =
+            vault.quoteSellProduct(steady, steadyShares);
+        (uint256 boostedEthOut, uint256 boostedFeeEth, uint256 boostedProductAmount) =
+            vault.quoteSellProduct(boosted, boostedShares);
+
+        assertEq(steadyProductAmount, 0.4985 ether);
+        assertEq(steadyFeeEth, 0.0014955 ether);
+        assertEq(steadyEthOut, 0.4970045 ether);
+        assertEq(boostedProductAmount, 0.24925 ether);
+        assertEq(boostedFeeEth, 0.00074775 ether);
+        assertEq(boostedEthOut, 0.24850225 ether);
+    }
+
+    function testVaultBackedProductTradesRespectSlippageLimits() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(SeriesExposureVault.Slippage.selector);
+        vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, 0.499 ether, alice);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buySteady{value: 0.5 ether}(factory, oldSeriesId, steady, 0, alice);
+
+        MintBurnToken steadyShare = steady.share();
+        vm.prank(alice);
+        steadyShare.approve(address(vault), sharesOut);
+
+        vm.prank(alice);
+        vm.expectRevert(EthLPVault.Slippage.selector);
+        vault.sellSteady(factory, oldSeriesId, steady, sharesOut, 0.498 ether, alice);
+    }
+
+    function testVaultBackedProductTradesRespectStrategyCaps() public {
+        _depositFromAlice(3 ether);
+        SeriesExposureVault steady = new SeriesExposureVault(oldP, address(this), "Steady ETH", "steadyETH", 5 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
+        vault.buySteady{value: 1.1 ether}(factory, oldSeriesId, steady, 0, alice);
+
+        vm.prank(alice);
+        vault.buySteady{value: 0.9 ether}(factory, oldSeriesId, steady, 0, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(EthLPVault.StrategyPolicyViolation.selector);
+        vault.buySteady{value: 0.4 ether}(factory, oldSeriesId, steady, 0, alice);
+    }
+
     function testUserProductTradeRejectsWrongWrapperSide() public {
         _depositFromAlice(2 ether);
         SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
