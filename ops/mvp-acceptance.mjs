@@ -12,6 +12,7 @@ const DEFAULT_END = "2026-06-01";
 const NODE_CHECKS = [
   "demo/app.js",
   "ops/contract-size-check.mjs",
+  "ops/deploy-ethereum-pilot.mjs",
   "ops/demo-page-smoke.mjs",
   "ops/deploy-local-demo.mjs",
   "ops/export-manifest.mjs",
@@ -235,7 +236,7 @@ function buildSteps(args) {
       area: "contracts",
       name: "Production core contract size check",
       command: "node",
-      args: ["ops/contract-size-check.mjs", "--skip-build"],
+      args: ["ops/contract-size-check.mjs"],
     });
   }
 

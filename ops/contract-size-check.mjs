@@ -16,6 +16,7 @@ const PRODUCTION_CONTRACTS = new Set([
   "EthLPVaultKeeper",
   "EthTokenAMM",
   "EthereumMainnetOracleConfig",
+  "EthereumPilotTopology",
   "MedianStableTwapSettlementOracle",
   "MintBurnToken",
   "ProtocolHealthLens",
@@ -28,6 +29,7 @@ const PRODUCTION_CONTRACTS = new Set([
 
 const SCRIPT_HELPERS = new Set([
   "DeployEthereumPilot",
+  "DeployEthereumPilotManifest",
   "DeployLocalMvp",
   "DeployLocalMvpManifest",
   "LocalMvpTopology",

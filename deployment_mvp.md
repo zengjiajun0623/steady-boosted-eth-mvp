@@ -166,8 +166,20 @@ healthLens() -> read-only protocol health lens for dashboards
 
 ## Ethereum Pilot Deploy
 
-`DeployEthereumPilot` mirrors the local topology but refuses non-mainnet
-deployment:
+Use `ops/deploy-ethereum-pilot.mjs` for a production-style Ethereum pilot. It
+runs the mainnet oracle preflight, broadcasts individual component deployments
+through `script/DeployEthereumPilotManifest.sol`, exports a manifest, and can
+run strict readiness immediately after export.
+
+```bash
+PRIVATE_KEY=<KEY> MAINNET_RPC_URL=<RPC> node ops/deploy-ethereum-pilot.mjs \
+  --mode pilot \
+  --out manifests/ethereum-pilot.json \
+  --boosted-demand-eth 5000 \
+  --solver-float-eth 250
+```
+
+The Solidity broadcast script refuses non-mainnet deployment:
 
 ```text
 block.chainid must be 1
@@ -176,11 +188,57 @@ series TWAP window comes from EthereumMainnetOracleConfig
 settlement oracle is MedianStableTwapSettlementOracle
 ```
 
-`DeployEthereumPilot` is a topology specification and test helper. Its runtime
-is intentionally large because it bundles deployment, topology getters, and seed
-helpers. Do not use it as a production `forge create` target. A production
-pilot should broadcast the individual component deployments, export a manifest,
-and then pass `ops/production-readiness.mjs` against that manifest.
+Pilot config is read from `PILOT_*` environment variables:
+
+```text
+PILOT_STRIKE_WAD
+PILOT_FIRST_MATURITY
+PILOT_SECOND_MATURITY
+PILOT_CAP_ETH_WEI
+PILOT_WITHDRAW_DELAY
+PILOT_MAX_ETH_PER_ROLL_WEI
+PILOT_MAX_ACTIVE_STRATEGY_ETH_WEI
+PILOT_MAX_ROLL_PRICE_WAD
+PILOT_MIN_INVENTORY_SALE_PRICE_WAD
+PILOT_STEADY_FLOOR_PRICE_WAD
+PILOT_BOOSTED_FLOOR_PRICE_WAD
+PILOT_MIN_AUCTION_DURATION
+PILOT_MIN_LP_BACKSTOP_DELAY
+PILOT_MIN_LP_AUCTION_TIME_LEFT
+PILOT_MAX_LP_AUCTION_PRICE_DROP_BPS
+PILOT_MAX_AUCTION_DURATION
+PILOT_MIN_WRAPPER_ROLL_AMOUNT_WEI
+PILOT_MAX_WRAPPER_ROLL_AMOUNT_WEI
+PILOT_MAX_ACTIVE_ROLL_AUCTIONS
+PILOT_MAX_ACTIVE_ROLL_AUCTIONS_PER_SELLER
+PILOT_MIN_REWARDED_OPERATION_AMOUNT_WEI
+PILOT_KEEPER_REWARD_ETH_WEI
+PILOT_AMM_FEE_BPS
+```
+
+Unset values use conservative pilot defaults: 25 ETH cap, 1 ETH max roll, 3 ETH
+max active strategy inventory, 4 day LP withdrawal delay, 12 hour minimum
+auction duration, 4 hour solver-first LP backstop delay, 6 hour minimum auction
+time left, 10 bps maximum LP price decay, 5 ETH wrapper roll cap, and 30 bps
+AMM/trader fee.
+
+After a successful pilot deploy, run production launch approval separately:
+
+```bash
+node ops/production-readiness.mjs \
+  --manifest manifests/ethereum-pilot.json \
+  --rpc $MAINNET_RPC_URL \
+  --audit-report evidence/audit-final.md \
+  --incident-runbook ops/incident-runbook.md \
+  --solver-commitments evidence/solver-commitments.md \
+  --boosted-demand-eth 5000 \
+  --solver-float-eth 250
+```
+
+`DeployEthereumPilot` is now a topology specification and test helper. Its
+runtime is intentionally large because it bundles deployment, topology getters,
+and seed helpers. Do not use it as a production `forge create` target. A
+production pilot should use the direct broadcast script above.
 
 The old all-in-one helper shape looked like this, but it is not the production
 path:
