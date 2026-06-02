@@ -102,7 +102,6 @@ Options:
                              Max historical outstanding N cost / Steady cap in bps (default: 160364)
   --no-solver-launch         Gate small launch capacity by LP-vault capital only
   --capacity-strict          Make capacity-policy misses fail instead of warn
-  --allow-auction-guardian   Allow a nonzero RollAuction guardian as a guarded-pilot exception
   --expect-chain-id <hex>    Optional expected chain id, e.g. 0x1 or 0x7a69
 
 Examples:
@@ -133,7 +132,6 @@ function parseArgs(argv) {
     capacityStressNDemandBps: 160_364,
     noSolverLaunch: false,
     capacityStrict: false,
-    allowAuctionGuardian: false,
     expectChainId: "",
   };
 
@@ -190,8 +188,6 @@ function parseArgs(argv) {
       args.noSolverLaunch = true;
     } else if (arg === "--capacity-strict") {
       args.capacityStrict = true;
-    } else if (arg === "--allow-auction-guardian") {
-      args.allowAuctionGuardian = true;
     } else if (arg === "--expect-chain-id") {
       args.expectChainId = next().toLowerCase();
     } else {
@@ -1152,13 +1148,13 @@ function checkAuctionAndSeries(checks, manifest, health, args) {
   const guardianDisabled = isZeroAddress(policy.guardian);
   addCheck(
     checks,
-    guardianDisabled ? "pass" : args.allowAuctionGuardian ? "warn" : "fail",
+    guardianDisabled ? "pass" : "fail",
     "decentralized",
-    "auction guardian is disabled for trust-minimized launch",
+    "auction guardian is disabled",
     guardianDisabled
       ? "RollAuction guardian is address(0), so admin setters are permanently disabled."
-      : `RollAuction guardian is ${policy.guardian}; pass --allow-auction-guardian only for an explicit guarded-pilot exception.`,
-    { guardian: policy.guardian, allowAuctionGuardian: args.allowAuctionGuardian },
+      : `RollAuction guardian is ${policy.guardian}; MVP readiness requires address(0).`,
+    { guardian: policy.guardian },
   );
   addCheck(
     checks,
@@ -1403,8 +1399,8 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId) {
       "risk",
       "mainnet settlement oracle uses USDC USDT DAI median",
       medianMatches
-        ? "Oracle source pools and conversion bounds match the guarded USDC, USDT, and DAI mainnet config."
-        : "Oracle source pools or conversion bounds do not match the guarded mainnet median config.",
+        ? "Oracle source pools and conversion bounds match the bounded USDC, USDT, and DAI mainnet config."
+        : "Oracle source pools or conversion bounds do not match the bounded mainnet median config.",
       { expectedPools: MAINNET_MEDIAN_ORACLE_POOLS, actualPools: medianOracle.poolConfigs },
     );
   } else if (medianMatches) {
@@ -1412,7 +1408,7 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId) {
       checks,
       "pass",
       "risk",
-      "settlement oracle matches guarded median config",
+      "settlement oracle matches bounded median config",
       "Non-mainnet deployment uses the same USDC, USDT, and DAI median source config.",
       { expectedPools: MAINNET_MEDIAN_ORACLE_POOLS, actualPools: medianOracle.poolConfigs },
     );
@@ -1541,7 +1537,7 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
     !health.auctionPolicy.resetsPaused &&
     !health.auctionPolicy.fillsPaused &&
     health.auctionPolicy.minSellAmount > 0n &&
-    (isZeroAddress(health.auctionPolicy.guardian) || args.allowAuctionGuardian);
+    isZeroAddress(health.auctionPolicy.guardian);
   const solverReady = isAddress(manifest.contracts.rollSolver);
   const baseSettlementReady =
     Object.values(health.series).every((series) => isAddress(series.oracle)) &&
@@ -1572,7 +1568,6 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
       wrappersReady,
       auctionReady,
       guardian: health.auctionPolicy.guardian,
-      allowAuctionGuardian: args.allowAuctionGuardian,
       solverReady,
       settlementReady,
     },

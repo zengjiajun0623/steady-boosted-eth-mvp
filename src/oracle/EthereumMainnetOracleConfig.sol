@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {MedianStableTwapSettlementOracle} from "./MedianStableTwapSettlementOracle.sol";
 import {IUniswapV3PoolOracleLike, UniswapV3TwapSettlementOracle} from "./UniswapV3TwapSettlementOracle.sol";
 
-/// @notice Mainnet ETH/stable TWAP oracle parameters for the first guarded pilot.
+/// @notice Mainnet ETH/stable TWAP oracle parameters for the first Ethereum pilot.
 /// @dev Pool/address facts were verified by calling UniswapV3Factory.getPool
 /// on Ethereum mainnet and checking the pool's token0/token1/fee methods.
 library EthereumMainnetOracleConfig {

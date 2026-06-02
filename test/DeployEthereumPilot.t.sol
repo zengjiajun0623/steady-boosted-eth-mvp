@@ -31,7 +31,7 @@ contract DeployEthereumPilotTest {
         deployer.deploy(_config());
     }
 
-    function testRejectsCapAboveGuardedPilotLimit() public {
+    function testRejectsCapAbovePilotLimit() public {
         vm.chainId(1);
         DeployEthereumPilot deployer = new DeployEthereumPilot();
         DeployEthereumPilot.Config memory config = _config();
@@ -100,7 +100,7 @@ contract DeployEthereumPilotTest {
             _assertOraclePoolConfig(oracle, oracleConfig, 0);
             _assertOraclePoolConfig(oracle, oracleConfig, 1);
             _assertOraclePoolConfig(oracle, oracleConfig, 2);
-            assertEq(rollAuction.guardian(), config.auctionGuardian);
+            assertEq(rollAuction.guardian(), address(0));
             assertEq(rollAuction.maxActiveAuctions(), config.maxActiveRollAuctions);
             assertEq(rollAuction.maxActiveAuctionsPerSeller(), config.maxActiveRollAuctionsPerSeller);
             assertEq(rollAuction.minStaleResetDelay(), 12 hours);
@@ -153,21 +153,6 @@ contract DeployEthereumPilotTest {
         rollAuction.setMinSellAmount(config.minWrapperRollAmount * 2);
         vm.expectRevert(RollAuction.NotGuardian.selector);
         rollAuction.setStaleResetPolicy(6 hours, 200);
-    }
-
-    function testCanDeployGuardedPilotWithExplicitAuctionGuardian() public {
-        vm.chainId(1);
-        DeployEthereumPilot deployer = new DeployEthereumPilot();
-        DeployEthereumPilot.Config memory config = _config();
-        config.auctionGuardian = address(this);
-
-        deployer.deploy(config);
-
-        (,, RollAuction rollAuction,,,) = deployer.core();
-        assertEq(rollAuction.guardian(), address(this));
-
-        rollAuction.setStopped(rollAuction.STOP_NEW_AUCTIONS());
-        assertEq(rollAuction.stopped(), rollAuction.STOP_NEW_AUCTIONS());
     }
 
     function testSeedMarketsWrapsFirstSeriesAndAddsShareLiquidity() public {
@@ -357,7 +342,6 @@ contract DeployEthereumPilotTest {
             maxActiveStrategyEth: 3 ether,
             maxRollPriceWad: 1e18,
             minInventorySalePriceWad: 0.999e18,
-            auctionGuardian: address(0),
             steadyFloorPriceWad: 0.999e18,
             boostedFloorPriceWad: 0.999e18,
             minAuctionDuration: 12 hours,

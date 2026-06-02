@@ -398,7 +398,6 @@ contract DeployLocalMvpTest {
             maxActiveStrategyEth: 3 ether,
             maxRollPriceWad: 1e18,
             minInventorySalePriceWad: 0.999e18,
-            auctionGuardian: address(0),
             minAuctionDuration: 12 hours,
             minLpBackstopDelay: 4 hours,
             minLpAuctionTimeLeft: 6 hours,

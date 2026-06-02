@@ -132,7 +132,7 @@ Start here if you are joining the project:
 ```text
 TEAM_HANDOFF.md      product mental model, invariants, and next workstreams
 contracts_mvp.md     contract behavior and test coverage
-deployment_mvp.md    local and guarded Ethereum pilot deployment
+deployment_mvp.md    local and Ethereum pilot deployment
 solver_market.md     solver onboarding and fill attribution
 SECURITY.md          current security posture and non-production caveats
 CONTRIBUTING.md      PR expectations
@@ -160,7 +160,7 @@ Settlement uses:
 
 ```text
 MedianStableTwapSettlementOracle over USDC, USDT, and DAI Uniswap v3 TWAPs
-EthereumMainnetOracleConfig for guarded Ethereum mainnet pool configuration
+EthereumMainnetOracleConfig for bounded Ethereum mainnet pool configuration
 MockSettlementOracle for local deterministic tests
 ```
 

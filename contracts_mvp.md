@@ -376,35 +376,22 @@ maxBuyAmount protection so takers never clear above their accepted price
 onchain auction discovery instead of a trusted offchain auction list
 redo/reset path for expired or price-stale partially filled auctions
 minimum-size rules to keep the public auction list and partial fills worth scanning
-optional guardian-set stale-reset policy for minimum delay and minimum Dutch price drop
+immutable stale-reset policy for minimum delay and minimum Dutch price drop
 per-product maximum roll-size caps, similar in spirit to Maker's global/per-market limits
 deployment-time global and per-seller active-auction ceilings to reduce keeper-market flooding
-optional guardian circuit-breaker levels for new auctions, resets, and fills
+no admin guardian in the MVP deployers or readiness gate
 ```
 
-The auction should be deployed with `guardian = address(0)` for immutable,
-trust-minimized policy. In that mode, admin setters are permanently disabled and
-only seller/solver/keeper auction mechanics remain callable. The active-auction
-ceilings are immutable either way; raising them requires a new auction
-deployment. The readiness gate fails nonzero guardians by default; guarded
-pilots must opt into that exception explicitly.
-If a guarded pilot uses a nonzero guardian, circuit-breaker levels are:
+MVP deployment scripts require `guardian = address(0)`. Readiness fails any
+manifest with a nonzero auction guardian. That permanently disables admin
+setters and leaves only seller/solver/keeper auction mechanics callable. Raising
+auction ceilings or changing stale-reset policy requires a new auction
+deployment.
 
-```text
-0: live
-1: pause new auctions
-2: pause new auctions and resets
-3: pause new auctions, resets, and fills
-```
-
-Seller cancellation remains available at every level, so paused auctions do not
-trap old inventory.
-
-The auction also has `minSellAmount`. New auctions must be at or above that
-size. Partial fills must also be at least that size and cannot leave a nonzero
-remainder below it. A taker can still clear the full current remainder with
-`fillAll`, even if a nonzero guardian later raises the threshold above that
-remainder, so dust rules do not trap inventory.
+The auction also has immutable `minSellAmount`. New auctions must be at or above
+that size. Partial fills must also be at least that size and cannot leave a
+nonzero remainder below it. A taker can still clear the full current remainder
+with `fillAll`, so dust rules do not trap inventory.
 
 The auction also exposes `resetStatus(auctionId)` and a stale reset policy:
 
@@ -504,7 +491,7 @@ Two adapters/config artifacts exist:
 MockSettlementOracle: local/test settlement price
 UniswapV3TwapSettlementOracle: maturity-anchored cumulative tick TWAP
 MedianStableTwapSettlementOracle: median of USDC, USDT, and DAI Uniswap v3 TWAPs
-EthereumMainnetOracleConfig: guarded mainnet 3-stable median TWAP parameters
+EthereumMainnetOracleConfig: bounded mainnet 3-stable median TWAP parameters
 ```
 
 The Uniswap-style adapters store each series maturity/window when the factory
@@ -525,7 +512,7 @@ whether to invert the tick price
 allowed average tick bounds per pool
 ```
 
-`EthereumMainnetOracleConfig` now provides the first guarded Ethereum mainnet
+`EthereumMainnetOracleConfig` now provides the first Ethereum mainnet
 configuration:
 
 ```text
@@ -585,7 +572,7 @@ auctionPolicyHealth also includes global/per-seller active-auction ceilings, sta
 wrapperKeeperHealth: roll price, duration, dust, cap, reward, and pending-series policy
 ```
 
-The local and guarded Ethereum pilot deployers both deploy and expose the lens
+The local and Ethereum pilot deployers both deploy and expose the lens
 through `healthLens()`. Keepers and external dashboards can use it as a stable
 read entry point without trusting a backend service.
 
@@ -655,7 +642,8 @@ trader can buy and sell Steady wrapper shares against ETH
 trader can buy and sell Boosted wrapper shares against ETH
 deployer wires trader AMMs to wrapper shares instead of expiring first-series tokens
 Ethereum pilot deployer rejects non-mainnet deployment
-Ethereum pilot deployer rejects caps above the guarded pilot limit
+Ethereum pilot deployer rejects caps above the pilot limit
+deployers reject nonzero auction guardians
 Ethereum pilot deployer wires the TWAP oracle, product wrappers, and wrapper-share AMMs
 Ethereum pilot deployer can bootstrap first product AMM liquidity
 deployers expose a read-only health lens for operator dashboards
@@ -680,7 +668,7 @@ roll auction price decays to a floor
 roll auction seller can reset expired partially filled inventory
 roll auction seller can reset price-stale inventory before full auction expiry
 roll auction can run with no guardian, permanently disabling admin setters
-nonzero roll auction guardian can configure or disable stale price-reset policy
+product deployers and readiness reject nonzero auction guardians
 roll auction rejects dust auctions, dust partial fills, and dust remainders
 roll auction fillAll can clear a remainder below the current dust threshold
 external solver can partially fill with next-series tokens
@@ -706,7 +694,7 @@ Settlement UX: add richer post-roll/residual inventory views
 Auction indexing: optionally add event/indexer indexing for historical analytics
 ```
 
-See `deployment_mvp.md` for the local mock-oracle and guarded Ethereum pilot
+See `deployment_mvp.md` for the local mock-oracle and Ethereum pilot
 deployment topologies.
 
 The current LP strategy accounting is intentionally conservative. It avoids

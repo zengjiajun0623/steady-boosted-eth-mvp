@@ -5,7 +5,7 @@ Three dependency-free deployment helpers are available:
 ```text
 script/DeployLocalMvp.sol: local/mock oracle topology
 script/DeployLocalMvpManifest.sol: direct local component deployer plus topology registry
-script/DeployEthereumPilot.sol: guarded Ethereum mainnet TWAP pilot topology
+script/DeployEthereumPilot.sol: Ethereum mainnet TWAP pilot topology
 ```
 
 They deploy:
@@ -164,7 +164,7 @@ wrapperKeepers() -> steadyKeeper, boostedKeeper
 healthLens() -> read-only protocol health lens for dashboards
 ```
 
-## Guarded Ethereum Pilot Deploy
+## Ethereum Pilot Deploy
 
 `DeployEthereumPilot` mirrors the local topology but refuses non-mainnet
 deployment:
@@ -195,8 +195,6 @@ withdrawDelay: LP withdrawal delay
 maxEthPerRoll / maxActiveStrategyEth: LP vault risk limits
 maxRollPriceWad: maximum roll price paid by vault/wrappers
 minInventorySalePriceWad: minimum ETH/token price accepted for residual LP inventory AMM sales
-auctionGuardian: set to address(0) for the normal trust-minimized launch path;
-a nonzero guardian is only for an explicit guarded pilot circuit-breaker exception
 minLpBackstopDelay: solver-first delay before the LP vault can backstop a roll
 minLpAuctionTimeLeft / maxLpAuctionPriceDropBps: LP vault freshness limits for
 backstop auction bids after the delay; launch deployments cap the price-decay
@@ -222,7 +220,7 @@ wrapperKeepers()
 healthLens()
 ```
 
-To bootstrap the first guarded pilot markets, call:
+To bootstrap the first Ethereum pilot markets, call:
 
 ```text
 seedMarkets(steadyShares, boostedShares, steadyMarketEth, boostedMarketEth, recipient)
@@ -488,7 +486,7 @@ example, a `5 ETH` max Steady roll needs about `25-50 ETH` in the ETH LP vault.
 On Ethereum mainnet, readiness also treats the settlement oracle as a launch
 gate: both live series must share one oracle, each series must use at least a
 72-hour settlement TWAP window by default, the oracle must expose three sources,
-and those sources must match the guarded USDC, USDT, and DAI Uniswap v3 median
+and those sources must match the bounded USDC, USDT, and DAI Uniswap v3 median
 config. Local mock-oracle deployments are still accepted off mainnet.
 
 Before raising Steady capacity, also run the historical economic stress gate:
@@ -554,60 +552,16 @@ python3 ops/capacity-policy.py \
   --strict
 ```
 
-The auction should be launched with `auctionGuardian = address(0)` for the
-normal trust-minimized launch path. This permanently disables admin setters
-after deployment. In that mode, `RollAuction.stopped()` remains `0` and the
-configured dust/stale-reset policy is immutable. Readiness fails by default if a
-nonzero guardian is present; pass `--allow-auction-guardian` only for an
-explicit guarded-pilot exception. If a guarded pilot uses a nonzero guardian, the
-runner marks blocked actions as not ready when `RollAuction.stopped()` would
-reject them:
+The auction is launched with `guardian = address(0)`. This permanently disables
+admin setters after deployment. In that mode,
+`RollAuction.stopped()` remains `0` and the configured dust/stale-reset policy
+is immutable. Readiness fails any nonzero auction guardian, and both local and
+Ethereum pilot deployers reject nonzero guardians in their config.
 
-```text
-stopped = 0: live
-stopped = 1: no new wrapper roll auctions
-stopped = 2: no new wrapper roll auctions or stale-roll resets
-stopped = 3: no new wrapper roll auctions, stale-roll resets, or fills
-```
-
-A nonzero auction guardian can set this level:
-
-```bash
-cast send <ROLL_AUCTION> \
-  'setStopped(uint256)' <LEVEL> \
-  --rpc-url <RPC_URL> \
-  --private-key <GUARDIAN_PRIVATE_KEY>
-```
-
-Auction seller cancellation remains live at every level so inventory can be
-returned instead of trapped.
-
-The same nonzero guardian can adjust the minimum auction/fill size:
-
-```bash
-cast send <ROLL_AUCTION> \
-  'setMinSellAmount(uint256)' <AMOUNT_WEI> \
-  --rpc-url <RPC_URL> \
-  --private-key <GUARDIAN_PRIVATE_KEY>
-```
-
-New auctions below this threshold are rejected. Partial fills below the threshold
-are rejected unless they clear the full current remainder, and fills cannot leave
-a nonzero remainder below the threshold. This keeps onchain auction discovery
-usable for independent solvers.
-
-The nonzero guardian can also tune the Maker-style stale reset rule:
-
-```bash
-cast send <ROLL_AUCTION> \
-  'setStaleResetPolicy(uint64,uint16)' <MIN_DELAY_SECONDS> <MIN_PRICE_DROP_BPS> \
-  --rpc-url <RPC_URL> \
-  --private-key <GUARDIAN_PRIVATE_KEY>
-```
-
-`MIN_PRICE_DROP_BPS=0` disables early price-stale resets, leaving only full
-auction expiry. The default local/pilot policy is 12 hours and 5 bps, which
-fits the normal 10 bps roll-cost band.
+New auctions below the immutable dust threshold are rejected. Partial fills below
+the threshold are rejected unless they clear the full current remainder, and
+fills cannot leave a nonzero remainder below the threshold. This keeps onchain
+auction discovery usable for independent solvers without an admin.
 
 To run an actual decentralized operator backend, use the companion runner. It
 recomputes decisions from public state each pass, filters for ready actions with
@@ -711,7 +665,7 @@ remainingEth / price / ui fields: optional display hints before a live auction i
 ## Production Oracle Config
 
 `DeployLocalMvp` uses `MockSettlementOracle`, which is only for local testing.
-For the first guarded Ethereum mainnet pilot, use
+For the first Ethereum mainnet pilot, use
 `EthereumMainnetOracleConfig` to deploy `MedianStableTwapSettlementOracle` with:
 
 ```text

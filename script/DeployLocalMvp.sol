@@ -31,7 +31,6 @@ contract DeployLocalMvp {
         uint256 maxActiveStrategyEth;
         uint256 maxRollPriceWad;
         uint256 minInventorySalePriceWad;
-        address auctionGuardian;
         uint64 minAuctionDuration;
         uint64 minLpBackstopDelay;
         uint64 minLpAuctionTimeLeft;
@@ -131,7 +130,6 @@ contract DeployLocalMvp {
             maxActiveStrategyEth: 3 ether,
             maxRollPriceWad: 1e18,
             minInventorySalePriceWad: MIN_NORMAL_ROLL_PRICE_WAD,
-            auctionGuardian: address(0),
             minAuctionDuration: 12 hours,
             minLpBackstopDelay: 4 hours,
             minLpAuctionTimeLeft: 6 hours,
@@ -172,7 +170,7 @@ contract DeployLocalMvp {
         stored.healthLens = new ProtocolHealthLens();
         stored.rollAuction =
             new RollAuction(
-                config.auctionGuardian,
+                address(0),
                 config.minWrapperRollAmount,
                 config.maxActiveRollAuctions,
                 config.maxActiveRollAuctionsPerSeller

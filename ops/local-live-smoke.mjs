@@ -514,7 +514,7 @@ async function runLiveSmoke(args) {
         manifestPath: guardedAuctionManifestPath,
         rpcUrl,
         noSolverLaunch: args.noSolverLaunch,
-        expectedText: "auction guardian is disabled for trust-minimized launch",
+        expectedText: "auction guardian is disabled",
       });
       record("Readiness rejects nonzero auction guardian by default", {
         guardedAuction,

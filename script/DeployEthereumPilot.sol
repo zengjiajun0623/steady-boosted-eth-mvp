@@ -14,7 +14,7 @@ import {EthLPVaultKeeper} from "../src/vault/EthLPVaultKeeper.sol";
 import {SeriesExposureVault} from "../src/vault/SeriesExposureVault.sol";
 import {SeriesExposureVaultKeeper} from "../src/vault/SeriesExposureVaultKeeper.sol";
 
-/// @notice Guarded Ethereum mainnet pilot wiring.
+/// @notice Ethereum mainnet pilot wiring with no auction admin guardian.
 /// @dev This mirrors the local MVP topology, but uses the deterministic
 /// three-stable Uniswap v3 median TWAP oracle config and refuses non-mainnet deployment.
 contract DeployEthereumPilot {
@@ -32,7 +32,6 @@ contract DeployEthereumPilot {
         uint256 maxActiveStrategyEth;
         uint256 maxRollPriceWad;
         uint256 minInventorySalePriceWad;
-        address auctionGuardian;
         uint256 steadyFloorPriceWad;
         uint256 boostedFloorPriceWad;
         uint64 minAuctionDuration;
@@ -168,7 +167,7 @@ contract DeployEthereumPilot {
         stored.healthLens = new ProtocolHealthLens();
         stored.rollAuction =
             new RollAuction(
-                config.auctionGuardian,
+                address(0),
                 config.minWrapperRollAmount,
                 config.maxActiveRollAuctions,
                 config.maxActiveRollAuctionsPerSeller
