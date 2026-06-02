@@ -478,6 +478,13 @@ capital, or by explicit scale-mode Boosted/solver demand. This keeps the
 offchain operator path aligned with the product rule: pause, shrink, or require
 liquidity instead of forcing an expensive roll.
 
+`ops/solver-improvement-report.mjs` reads public `AuctionFilled` logs and
+attributes roll execution between external solvers and the ETH LP vault. It
+reports how much external solvers filled before the vault and estimates
+buy-token savings versus the vault's max-roll-price baseline. This is not a
+reward contract yet; it is the transparent accounting layer needed before a
+solver incentive program.
+
 For parallel operation, the runner supports role-scoped key environment
 variables. Solver, wrapper-maintenance, LP backstop, and inventory-unwind loops
 can run as separate processes with separate keys, avoiding a shared nonce stream

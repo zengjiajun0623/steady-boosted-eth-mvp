@@ -570,6 +570,25 @@ async function runLiveSmoke(args) {
       maxFillEth: args.noSolverLaunch ? "1.0" : "0.6",
     });
 
+    const solverReportRaw = await run(process.execPath, [
+      "ops/solver-improvement-report.mjs",
+      "--manifest",
+      manifestPath,
+      "--rpc",
+      rpcUrl,
+      "--auction-id",
+      auctionId.toString(),
+      ...(args.noSolverLaunch ? [] : ["--require-external-fill"]),
+      "--json",
+    ]);
+    const solverReport = JSON.parse(solverReportRaw);
+    record(args.noSolverLaunch ? "Solver report confirms vault-only bootstrap" : "Solver report confirms external fill before vault", {
+      auctionId: auctionId.toString(),
+      externalSolverFillWei: solverReport.totals.externalSolver.sellAmount,
+      lpVaultFillWei: solverReport.totals.lpVault.sellAmount,
+      solverSavedBuyAmountWei: solverReport.totals.externalSolver.savedBuyAmount,
+    });
+
     await runKeeperRunner({
       rpcUrl,
       manifestPath,

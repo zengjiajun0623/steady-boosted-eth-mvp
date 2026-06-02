@@ -178,6 +178,7 @@ ops/frontend-live-surface-check.mjs: static acceptance check for wallet-connecte
 ops/local-live-smoke.mjs: fresh-Anvil deploy/trader/LP/solver smoke test, including optional negative readiness probes
 ops/mvp-acceptance.mjs: local/live acceptance gate for trader, LP, solver, and decentralized-liveness requirements
 ops/solver-model-spread.mjs: reference external solver model for price-edge and fill-size decisions
+ops/solver-improvement-report.mjs: public event-log attribution for solver fills versus ETH LP vault backstop fills
 ops/readiness-check.mjs: live manifest/RPC readiness gate for trader markets, LP vault, solver auctions, keepers, settlement wiring, and decentralized liveness
 ops/economic-stress-check.py: historical RLP/N-side stress gate for roll cost, capacity, and paired Boosted demand assumptions
 ops/capacity-policy.py: ETH-denominated launch cap gate from committed LP-vault capital, Boosted/solver demand, or explicit no-solver launch mode
@@ -215,6 +216,11 @@ node ops/keeper-runner.mjs \
   --action solver \
   --recipient <ADDRESS> \
   --solver-model ops/solver-model-spread.mjs
+
+# Solver attribution: measure external fill before the ETH LP vault.
+node ops/solver-improvement-report.mjs \
+  --rpc <RPC_URL> \
+  --auction-id <AUCTION_ID>
 
 # Wrapper keeper role: start/finalize/reset/cancel validated wrapper rolls.
 node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper

@@ -390,6 +390,21 @@ emits the `RollSolver` fill-all variant instead of a fixed-size fill. This keeps
 the solver protected by `maxBuyAmount` while avoiding needless stale-size reverts
 if another counterparty partially fills before the transaction lands.
 
+After a roll, measure whether external solvers improved execution before the
+ETH LP vault stepped in:
+
+```bash
+node ops/solver-improvement-report.mjs \
+  --manifest demo/contract-manifest.json \
+  --rpc <RPC_URL> \
+  --auction-id <AUCTION_ID>
+```
+
+The report reads public `AuctionFilled` logs, classifies fills as external
+solver or ETH LP vault backstop, and compares external solver fill prices
+against the vault's configured `maxRollPriceWad` baseline. This is accounting
+for competitive improvement, not a production reward program yet.
+
 Before treating a manifest as pilot-ready, run the readiness gate:
 
 ```bash

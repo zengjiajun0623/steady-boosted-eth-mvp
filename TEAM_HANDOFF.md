@@ -127,12 +127,15 @@ contracts_mvp.md                contract architecture and behavior
 deployment_mvp.md               local and Ethereum pilot deployment topology
 oracle_settlement.md            settlement oracle notes
 decentralized_mvp.md            trust-minimized product design
+solver_market.md                solver onboarding and attribution guide
 demo/index.html                 demo surface
 demo/app.js                     demo interactions and simulated/live mode
 ops/mvp-acceptance.mjs          full local acceptance gate
 ops/readiness-check.mjs         live manifest readiness gate
 ops/keeper-decisions.mjs        public-state operator suggestions
 ops/keeper-runner.mjs           optional execution runner
+ops/solver-improvement-report.mjs
+                                public event-log attribution for solver fills
 ops/vault-strategy-plan.mjs     deterministic vault strategy action planner
 ops/economic-stress-check.py    historical roll-cost stress gate
 ops/capacity-policy.py          ETH-denominated capacity gate
@@ -155,7 +158,8 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
 3. Solver market
 
-   Add solver docs, sample integrations, and reward accounting for fills that
+   Expand from the current solver guide, sample model, and fill-attribution
+   report into real solver integrations and reward accounting for fills that
    improve execution before the vault. The goal is competitive improvement, not
    activity for its own sake.
 

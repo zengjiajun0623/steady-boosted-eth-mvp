@@ -19,6 +19,7 @@ const NODE_CHECKS = [
   "ops/mvp-acceptance.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",
+  "ops/solver-improvement-report.mjs",
   "ops/vault-strategy-plan.mjs",
 ];
 
@@ -411,7 +412,7 @@ function printReport(report) {
   console.log("- Frontend: wallet-connected trader, LP, solver, keeper, and settlement action surface.");
   console.log("- LP: ETH vault deposit/withdraw, roll backstop, inventory cleanup, return check, and capacity policy.");
   console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and expensive-roll rejection.");
-  console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, and keeper discovery.");
+  console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, keeper discovery, and solver-vault fill attribution.");
   console.log("- Rotation: historical 10 bps roll-cost gate plus a live 10 bps public roll smoke.");
   console.log("- Bootstrap: no-solver launch capacity gate with LP vault capital as the protocol liquidity engine.");
   console.log("- Decentralization: role-separated trader/LP/solver/keeper smoke, public scripts, readiness lens, 3-stable median settlement, and merge/redeem wiring.");
