@@ -15,6 +15,10 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FOUNDRY_PROFILE: ci
+
+permissions:
+  contents: read
 
 jobs:
   acceptance:
@@ -39,7 +43,7 @@ jobs:
       - name: Setup Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.5.1
 
       - name: Run MVP acceptance gate
         run: node ops/mvp-acceptance.mjs --local-live
