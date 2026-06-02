@@ -62,6 +62,31 @@ That acceptance command starts a fresh local chain, deploys the MVP, seeds the
 markets, checks readiness, exercises trader buy/sell flows, runs external-solver
 and no-solver roll paths, and verifies LP inventory cleanup.
 
+## Demo Evidence
+
+Proven by the local acceptance gate:
+
+```text
+- static demo page is present and usable
+- trader buy/sell flows work for Steady ETH and Boosted ETH with ETH
+- ETH LP vault deposit, withdraw, and claim flows work locally
+- public solver roll path works locally
+- no-solver vault-only bootstrap path works locally
+- settlement runner can settle matured local series
+- readiness rejects unsafe staging defaults, including mock settlement when
+  --require-median-oracle is used
+```
+
+Not proven yet:
+
+```text
+- public-fund safety
+- external audit coverage
+- real solver liquidity commitments
+- production deployment manifest passing --rpc readiness
+- production wallet hardening, monitoring, and incident response
+```
+
 ## What Must Stay True
 
 These are product invariants, not preferences.
@@ -201,7 +226,7 @@ The MVP is useful for team exploration, but it is not ready for public funds.
 - no production deployment manifest proven by --rpc readiness
 - no real solver commitments or liquidity SLAs
 - no formal proof of roll economics across all market regimes
-- no wallet-connected production frontend yet
+- no production-grade wallet frontend yet
 - no incident response or bug bounty program yet
 ```
 

@@ -114,6 +114,31 @@ passes. That gate proves the user-facing trade flow, LP vault flow, public
 solver roll path, no-solver vault bootstrap path, settlement runner, and
 readiness checks on a fresh local deployment.
 
+## Demo Evidence
+
+What is proven today:
+
+```text
+The static demo opens and keeps the Trade, Vault, and Auctions pages usable.
+Traders can buy and sell Steady ETH and Boosted ETH with ETH locally.
+LPs can deposit, withdraw, and claim through the ETH LP vault locally.
+External solvers can fill public roll auctions.
+The ETH LP vault can bootstrap a small no-solver launch locally.
+The settlement runner can settle matured local series.
+Readiness rejects unsafe staging defaults, including mock settlement when
+--require-median-oracle is used.
+```
+
+What is not claimed yet:
+
+```text
+public-fund safety
+external audit coverage
+real solver liquidity commitments
+a production deployment manifest passing --rpc readiness
+production wallet hardening, monitoring, and incident response
+```
+
 ## Run The MVP
 
 Run the contract suite:
