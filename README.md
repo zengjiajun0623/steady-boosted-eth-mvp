@@ -268,7 +268,10 @@ node ops/readiness-check.mjs \
 ```
 
 Leave `--require-median-oracle` off for the local mock demo. Use it for staging
-or pilot readiness so mock/manual settlement cannot accidentally pass.
+or pilot readiness so mock/manual settlement cannot accidentally pass. Readiness
+also enforces the median-oracle gate automatically for live-like manifest modes
+such as `live`, `staging`, `pilot`, and `production`; local modes such as
+`local-live`, `simulation`, `demo`, and `test` remain mock-oracle compatible.
 
 For a small no-solver launch, gate capacity by the ETH LP vault alone:
 

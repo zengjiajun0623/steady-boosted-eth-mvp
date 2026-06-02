@@ -496,7 +496,10 @@ and those sources must match the bounded USDC, USDT, and DAI Uniswap v3 median
 config. Local mock-oracle deployments are still accepted off mainnet.
 
 For staging or pilot checks on any chain, add `--require-median-oracle` to make
-readiness reject mock/manual settlement even off mainnet.
+readiness reject mock/manual settlement even off mainnet. Readiness also treats
+live-like manifest modes (`live`, `staging`, `pilot`, `production`, or any other
+non-local mode) as median-required automatically. Local/demo/test modes remain
+mock-oracle compatible for deterministic development.
 
 Before raising Steady capacity, also run the historical economic stress gate:
 

@@ -93,6 +93,7 @@ Options:
                              Minimum series settlement TWAP window (default: 72)
   --require-median-oracle    Fail unless settlement exposes a 3-source median oracle,
                              even off mainnet. Keep this off for local mock demos.
+                             Also enforced automatically for live/staging/pilot/production manifest modes.
   --boosted-demand-eth <eth> Credible committed Boosted/N buyer capacity beyond visible AMM ETH (default: 0)
   --solver-float-eth <eth>   External solver balance sheet for paired N inventory (default: 0)
   --capacity-rlp-ratio-bps <n>
@@ -235,6 +236,30 @@ function sameAddress(a, b) {
 
 function isMainnetChain(rpcChainId) {
   return String(rpcChainId || "").toLowerCase() === "0x1";
+}
+
+function manifestMode(manifest) {
+  return String(manifest?.mode || "").trim().toLowerCase();
+}
+
+function isLocalManifestMode(manifest) {
+  const mode = manifestMode(manifest);
+  return (
+    mode === "" ||
+    mode === "simulation" ||
+    mode === "demo" ||
+    mode === "test" ||
+    mode === "local" ||
+    mode.startsWith("local-")
+  );
+}
+
+function manifestModeRequiresMedian(manifest) {
+  return !isLocalManifestMode(manifest);
+}
+
+function medianOracleRequired(manifest, rpcChainId, args) {
+  return isMainnetChain(rpcChainId) || args.requireMedianOracle || manifestModeRequiresMedian(manifest);
 }
 
 function cleanHex(hex) {
@@ -731,6 +756,7 @@ async function readHealth(rpcUrl, manifest, args) {
 
 function checkManifestAndChain(checks, manifest, rpcChainId, args) {
   const missing = missingManifestKeys(manifest);
+  const modeRequiresMedian = manifestModeRequiresMedian(manifest);
   addCheck(
     checks,
     missing.length ? "fail" : "pass",
@@ -763,6 +789,22 @@ function checkManifestAndChain(checks, manifest, rpcChainId, args) {
       { expected: args.expectChainId, rpcChainId },
     );
   }
+
+  addCheck(
+    checks,
+    modeRequiresMedian || isLocalManifestMode(manifest) ? "pass" : "warn",
+    "manifest",
+    "manifest mode trust policy",
+    modeRequiresMedian
+      ? `Manifest mode '${manifest.mode || "live"}' is treated as live-like, so readiness requires a median settlement oracle.`
+      : `Manifest mode '${manifest.mode || "local"}' is treated as local/demo, so mock settlement is allowed.`,
+    {
+      mode: manifest.mode || null,
+      modeRequiresMedian,
+      requireMedianOracle: args.requireMedianOracle,
+      rpcChainId,
+    },
+  );
 }
 
 function checkMarkets(checks, health, args) {
@@ -1349,7 +1391,7 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId, args) {
   const firstOracle = health.series.first.oracle;
   const secondOracle = health.series.second.oracle;
   const mainnet = isMainnetChain(rpcChainId);
-  const medianRequired = mainnet || args.requireMedianOracle;
+  const medianRequired = medianOracleRequired(manifest, rpcChainId, args);
   const medianOracle = health.medianOracle;
   const medianMatches = medianOracleMatchesMainnetConfig(medianOracle);
 
@@ -1383,8 +1425,16 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId, args) {
       ? `Oracle exposes ${medianOracle.sourceCount.toString()} source(s) and factory ${medianOracle.configuredFactory}.`
       : args.requireMedianOracle
         ? `Median oracle is required, but this oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`
+        : manifestModeRequiresMedian(manifest)
+          ? `Manifest mode '${manifest.mode || "live"}' requires median settlement, but this oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`
         : `Oracle does not expose median source metadata: ${medianOracle?.error || "unknown error"}.`,
-    { oracle: firstOracle, medianOracle, requireMedianOracle: args.requireMedianOracle },
+    {
+      oracle: firstOracle,
+      medianOracle,
+      requireMedianOracle: args.requireMedianOracle,
+      mode: manifest.mode || null,
+      modeRequiresMedian: manifestModeRequiresMedian(manifest),
+    },
   );
 
   if (!medianOracle?.supported) return;
@@ -1441,16 +1491,21 @@ function checkSettlementOracles(checks, manifest, health, rpcChainId, args) {
         : "Oracle source pools or conversion bounds do not match the bounded mainnet median config.",
       { expectedPools: MAINNET_MEDIAN_ORACLE_POOLS, actualPools: medianOracle.poolConfigs },
     );
-  } else if (args.requireMedianOracle) {
+  } else if (args.requireMedianOracle || manifestModeRequiresMedian(manifest)) {
     addCheck(
       checks,
       medianOracleReady(manifest, health) ? "pass" : "fail",
       "risk",
       "settlement oracle satisfies required median gate",
       medianOracleReady(manifest, health)
-        ? "Non-mainnet readiness requires and found a registered 3-source median settlement oracle."
+        ? "Readiness requires and found a registered 3-source median settlement oracle."
         : "Median oracle is required, but source count, factory binding, or series registrations are incomplete.",
-      { medianOracle, requireMedianOracle: args.requireMedianOracle },
+      {
+        medianOracle,
+        requireMedianOracle: args.requireMedianOracle,
+        mode: manifest.mode || null,
+        modeRequiresMedian: manifestModeRequiresMedian(manifest),
+      },
     );
   } else if (medianMatches) {
     addCheck(
@@ -1600,7 +1655,7 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
   const baseSettlementReady =
     Object.values(health.series).every((series) => isAddress(series.oracle)) &&
     sameAddress(health.series.first.oracle, health.series.second.oracle);
-  const medianRequired = isMainnetChain(rpcChainId) || args.requireMedianOracle;
+  const medianRequired = medianOracleRequired(manifest, rpcChainId, args);
   const settlementReady = medianRequired
     ? baseSettlementReady && medianOracleReady(manifest, health) && (!isMainnetChain(rpcChainId) || medianOracleMatchesMainnetConfig(health.medianOracle))
     : baseSettlementReady;
@@ -1650,6 +1705,8 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
       guardian: health.auctionPolicy.guardian,
       solverReady,
       settlementReady,
+      medianRequired,
+      mode: manifest.mode || null,
     },
   );
 }

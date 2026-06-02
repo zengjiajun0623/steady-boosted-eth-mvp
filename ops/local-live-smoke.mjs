@@ -577,6 +577,23 @@ async function runLiveSmoke(args) {
         manifestPath: premiumBackstopManifestPath,
       });
 
+      const liveModeMockManifestPath = await writeTamperedManifest(
+        tempDir,
+        manifest,
+        "live-mode-mock-settlement",
+        (draft) => {
+          draft.mode = "live";
+        },
+      );
+      await expectReadinessFailure({
+        name: "Live-mode mock settlement manifest",
+        manifestPath: liveModeMockManifestPath,
+        rpcUrl,
+        noSolverLaunch: args.noSolverLaunch,
+        expectedText: "Manifest mode 'live' requires median settlement",
+      });
+      record("Readiness rejects live-mode mock settlement automatically", { manifestPath: liveModeMockManifestPath });
+
       await expectReadinessFailure({
         name: "Local mock settlement manifest with required median oracle",
         manifestPath,

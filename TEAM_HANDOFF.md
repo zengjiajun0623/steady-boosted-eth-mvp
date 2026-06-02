@@ -189,7 +189,8 @@ ops/capacity-policy.py          ETH-denominated capacity gate
    keeper policies, auction limits, and capacity checks. Before deploy, run the
    mainnet oracle preflight against the intended Ethereum RPC. For staging or
    pilot readiness, pass `--require-median-oracle` so mock/manual settlement
-   cannot pass.
+   cannot pass. Readiness also enforces that automatically for live-like
+   manifest modes such as `live`, `staging`, `pilot`, and `production`.
 
 2. Vault strategy
 
