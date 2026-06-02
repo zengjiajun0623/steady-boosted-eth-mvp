@@ -300,6 +300,46 @@ contract EthLPVaultTest is VaultTestBase {
         assertEq(vault.activeStrategyEth(), 0.997 ether);
     }
 
+    function testUserCanBuyBoostedFromLpVaultWithEth() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault boosted =
+            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0.498 ether, alice);
+
+        assertEq(sharesOut, 0.4985 ether);
+        assertEq(boosted.share().balanceOf(alice), 0.4985 ether);
+        assertEq(boosted.totalAssets(), 0.4985 ether);
+        assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(vault.activeStrategyEth(), 0.4985 ether);
+        assertEq(vault.managedAssets(), 2.0015 ether);
+    }
+
+    function testUserCanSellBoostedBackToLpVaultForEth() public {
+        _depositFromAlice(2 ether);
+        SeriesExposureVault boosted =
+            new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
+
+        vm.prank(alice);
+        uint256 sharesOut = vault.buyBoosted{value: 0.5 ether}(factory, oldSeriesId, boosted, 0, alice);
+
+        MintBurnToken boostedShare = boosted.share();
+        vm.prank(alice);
+        boostedShare.approve(address(vault), sharesOut);
+
+        uint256 aliceBefore = alice.balance;
+        vm.prank(alice);
+        uint256 ethOut = vault.sellBoosted(factory, oldSeriesId, boosted, sharesOut, 0.497 ether, alice);
+
+        assertEq(ethOut, 0.4970045 ether);
+        assertEq(alice.balance, aliceBefore + ethOut);
+        assertEq(boostedShare.balanceOf(alice), 0);
+        assertEq(oldP.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(oldN.balanceOf(address(vault)), 0.4985 ether);
+        assertEq(vault.activeStrategyEth(), 0.997 ether);
+    }
+
     function testUserProductTradeRejectsWrongWrapperSide() public {
         _depositFromAlice(2 ether);
         SeriesExposureVault boosted = new SeriesExposureVault(oldN, address(this), "Boosted ETH", "boostedETH", 5 ether);
