@@ -85,6 +85,35 @@ Vault: deposit ETH into the liquidity vault and see vault risk
 Auctions: inspect solver/keeper roll activity
 ```
 
+## 2-Minute Demo Path
+
+Use this path when showing the MVP to a teammate:
+
+```text
+1. Trade page
+   Buy Steady ETH with ETH, then switch to Boosted ETH.
+   The story is: one product is calmer ETH exposure, the other is higher-upside
+   ETH exposure.
+
+2. Sell flow
+   Switch Buy to Sell.
+   The story is: users can exit back to ETH without learning the roll machinery.
+
+3. Vault page
+   Show the ETH LP vault deposit flow and risk language.
+   The story is: LPs provide ETH liquidity, earn market-making PnL, and can lose.
+
+4. Auctions page
+   Show public roll auctions, solver actions, and vault backstop status.
+   The story is: rolls are public, solvers compete, and the vault bootstraps
+   liquidity only inside the cheap-roll policy.
+```
+
+The demo is ready to show when `node ops/mvp-acceptance.mjs --local-live`
+passes. That gate proves the user-facing trade flow, LP vault flow, public
+solver roll path, no-solver vault bootstrap path, settlement runner, and
+readiness checks on a fresh local deployment.
+
 ## Run The MVP
 
 Run the contract suite:

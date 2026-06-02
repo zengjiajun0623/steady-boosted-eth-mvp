@@ -34,6 +34,18 @@ Open:
 http://localhost:8765/demo/
 ```
 
+Demo it in this order:
+
+```text
+1. Trade: buy Steady ETH, switch to Boosted ETH, then show Sell back to ETH.
+2. Vault: show ETH LP deposit, risk language, and non-guaranteed returns.
+3. Auctions: show public roll auctions, solver actions, and vault backstop.
+```
+
+The product story should stay simple: traders choose ETH exposure, LPs provide
+ETH liquidity with risk, solvers compete publicly, and the vault bootstraps
+small launch capacity only inside strict roll-cost policy.
+
 Run the core tests:
 
 ```bash
