@@ -53,6 +53,11 @@ never overpay collateral. Full paired redemptions may leave at most 1 wei of
 rounding dust in the factory for arbitrary wei-sized positions; that is bounded
 dust, not debt.
 
+LP-vault coverage includes both a discounted-roll profit path and a par-priced
+roll loss path caused by series basis risk. The vault share price can go down
+after a roll, so LP returns must be presented as market-making PnL with risk,
+not as guaranteed yield.
+
 Settlement coverage includes 3-stable median TWAP tests that reject missing or
 out-of-band sources, ignore one low or high issuer outlier, and fuzz that
 settlement equals the median of the three source prices.

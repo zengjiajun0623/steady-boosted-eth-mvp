@@ -278,6 +278,38 @@ contract EthLPVaultTest is VaultTestBase {
         assertGt(vault.convertToAssets(1 ether), 1 ether);
     }
 
+    function testParSteadyRollCanReduceLpShareValueFromSeriesBasisRisk() public {
+        bytes32 higherStrikeSeriesId =
+            factory.createSeries(1_500e18, uint64(block.timestamp + NEW_MATURITY), TWAP_WINDOW, CAP, oracle);
+        (MintBurnToken higherP, MintBurnToken higherN) = _tokens(higherStrikeSeriesId);
+
+        _depositFromAlice(2 ether);
+        uint256 auctionId = _createOldPAuctionForBuyToken(higherP, 1 ether, 1e18, 1e18, 1 days);
+
+        vm.warp(block.timestamp + 12 hours);
+        uint256 newPPaid = vault.fillSteadyRoll(
+            factory, auction, oldSeriesId, higherStrikeSeriesId, auctionId, 0.5 ether, 0.5 ether, 0.5 ether
+        );
+        assertEq(newPPaid, 0.5 ether);
+
+        vm.warp(block.timestamp + NEW_MATURITY);
+        oracle.setSettlementPrice(oldSeriesId, 2_000e18);
+        oracle.setSettlementPrice(higherStrikeSeriesId, 2_000e18);
+        factory.settle(oldSeriesId);
+        factory.settle(higherStrikeSeriesId);
+
+        vault.redeemP(factory, oldSeriesId, 0.5 ether);
+        vault.redeemN(factory, higherStrikeSeriesId, 0.5 ether);
+        vault.closeStrategy();
+
+        assertEq(vault.strategyActive() ? 1 : 0, 0);
+        assertEq(oldP.balanceOf(address(vault)), 0);
+        assertEq(higherP.balanceOf(address(vault)), 0);
+        assertEq(higherN.balanceOf(address(vault)), 0);
+        assertEq(vault.managedAssets(), 1.875 ether);
+        assertEq(vault.convertToAssets(1 ether), 0.9375 ether);
+    }
+
     function testManagerCanMergeMatchedInventoryAfterMaturityBeforeSettlement() public {
         _depositFromAlice(2 ether);
         uint256 auctionId = _createOldPAuction(1 ether);
@@ -431,6 +463,17 @@ contract EthLPVaultTest is VaultTestBase {
         internal
         returns (uint256 auctionId)
     {
+        return _createOldPAuctionForBuyToken(newP, oldPAmount, startPrice, endPrice, duration);
+    }
+
+    function _createOldPAuctionForBuyToken(
+        MintBurnToken buyToken,
+        uint256 oldPAmount,
+        uint256 startPrice,
+        uint256 endPrice,
+        uint64 duration
+    ) internal returns (uint256 auctionId)
+    {
         vm.prank(steadyVault);
         factory.mint{value: oldPAmount}(oldSeriesId);
 
@@ -440,7 +483,7 @@ contract EthLPVaultTest is VaultTestBase {
         vm.prank(steadyVault);
         auctionId = auction.createAuction(
             IERC20Like(address(oldP)),
-            IERC20Like(address(newP)),
+            IERC20Like(address(buyToken)),
             oldPAmount,
             startPrice,
             endPrice,
