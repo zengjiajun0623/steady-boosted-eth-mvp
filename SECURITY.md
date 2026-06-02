@@ -47,6 +47,12 @@ Security review should focus on:
 - deployment manifests and readiness checks
 ```
 
+Current invariant coverage includes fuzz tests for complementary P/N payoff
+math, pre-settlement mint/merge accounting, and post-settlement redemptions that
+never overpay collateral. Full paired redemptions may leave at most 1 wei of
+rounding dust in the factory for arbitrary wei-sized positions; that is bounded
+dust, not debt.
+
 ## Non-Negotiable Safety Rules
 
 Do not add:

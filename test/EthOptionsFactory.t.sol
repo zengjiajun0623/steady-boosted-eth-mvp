@@ -64,6 +64,10 @@ contract TestBase {
         require(actual == expected, "address mismatch");
     }
 
+    function assertLe(uint256 actual, uint256 expected) internal pure {
+        require(actual <= expected, "uint too large");
+    }
+
     receive() external payable {}
 }
 
@@ -228,7 +232,75 @@ contract EthOptionsFactoryTest is TestBase {
         factory.settle(seriesId);
     }
 
+    function testFuzzPayoffsAreComplementary(uint256 rawStrike, uint256 rawSettlementPrice) public view {
+        uint256 strike = 1 + (rawStrike % 1_000_000e18);
+        uint256 settlementPrice = 1 + (rawSettlementPrice % 1_000_000e18);
+
+        uint256 pPayoff = factory.pPayoffWad(strike, settlementPrice);
+        uint256 nPayoff = factory.nPayoffWad(strike, settlementPrice);
+
+        assertEq(pPayoff + nPayoff, 1e18);
+        assertLe(pPayoff, 1e18);
+        assertLe(nPayoff, 1e18);
+    }
+
+    function testFuzzMintAndMergePreserveMatchedAccounting(uint256 rawMintAmount, uint256 rawMergeAmount) public {
+        (MintBurnToken pToken, MintBurnToken nToken) = _tokens();
+        uint256 mintAmount = _boundedAmount(rawMintAmount);
+        uint256 mergeAmount = 1 + (rawMergeAmount % mintAmount);
+
+        factory.mint{value: mintAmount}(seriesId);
+        uint256 balanceBefore = address(this).balance;
+        factory.merge(seriesId, mergeAmount);
+
+        uint256 remaining = mintAmount - mergeAmount;
+        assertEq(address(this).balance, balanceBefore + mergeAmount);
+        assertEq(pToken.balanceOf(address(this)), remaining);
+        assertEq(nToken.balanceOf(address(this)), remaining);
+        (,,,, uint256 openInterestEth, uint256 collateralEth,,,,,) = factory.series(seriesId);
+        assertEq(openInterestEth, remaining);
+        assertEq(collateralEth, remaining);
+        assertEq(address(factory).balance, remaining);
+    }
+
+    function testFuzzSettledRedemptionsNeverOverpayCollateral(
+        uint256 rawMintAmount,
+        uint256 rawSettlementPrice,
+        bool redeemNFirst
+    ) public {
+        (MintBurnToken pToken, MintBurnToken nToken) = _tokens();
+        uint256 mintAmount = _boundedAmount(rawMintAmount);
+        uint256 settlementPrice = 1 + (rawSettlementPrice % 1_000_000e18);
+
+        factory.mint{value: mintAmount}(seriesId);
+        vm.warp(block.timestamp + MATURITY);
+        oracle.setSettlementPrice(seriesId, settlementPrice);
+        factory.settle(seriesId);
+
+        uint256 balanceBefore = address(this).balance;
+        if (redeemNFirst) {
+            factory.redeemN(seriesId, mintAmount);
+            factory.redeemP(seriesId, mintAmount);
+        } else {
+            factory.redeemP(seriesId, mintAmount);
+            factory.redeemN(seriesId, mintAmount);
+        }
+
+        uint256 paid = address(this).balance - balanceBefore;
+        (,,,,, uint256 collateralEth,,,,,) = factory.series(seriesId);
+        assertLe(paid, mintAmount);
+        assertEq(paid + collateralEth, mintAmount);
+        assertLe(collateralEth, 1);
+        assertEq(pToken.balanceOf(address(this)), 0);
+        assertEq(nToken.balanceOf(address(this)), 0);
+        assertEq(address(factory).balance, collateralEth);
+    }
+
     function _tokens() internal view returns (MintBurnToken pToken, MintBurnToken nToken) {
         (,,,,,, pToken, nToken,,,) = factory.series(seriesId);
+    }
+
+    function _boundedAmount(uint256 rawAmount) internal pure returns (uint256) {
+        return 1 + (rawAmount % CAP);
     }
 }
