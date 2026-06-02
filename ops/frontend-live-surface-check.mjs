@@ -119,7 +119,7 @@ const APP_REQUIREMENTS = [
     area: "readiness",
     name: "live health and capacity reads",
     patterns: [
-      "readOperatorHealthState",
+      "readProtocolHealthState",
       "healthLensReady",
       "SELECTORS.healthMarket",
       "SELECTORS.healthLpVault",

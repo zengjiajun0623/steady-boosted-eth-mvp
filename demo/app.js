@@ -221,16 +221,16 @@ const els = {
   settlementSettle: document.querySelector("#settlementSettle"),
   settlementRedeem: document.querySelector("#settlementRedeem"),
   settlementStatus: document.querySelector("#settlementStatus"),
-  operatorSub: document.querySelector("#operatorSub"),
-  operatorMode: document.querySelector("#operatorMode"),
-  operatorMarketDepth: document.querySelector("#operatorMarketDepth"),
-  operatorMarketDepthSub: document.querySelector("#operatorMarketDepthSub"),
-  operatorVaultUtil: document.querySelector("#operatorVaultUtil"),
-  operatorVaultUtilSub: document.querySelector("#operatorVaultUtilSub"),
-  operatorRollState: document.querySelector("#operatorRollState"),
-  operatorRollStateSub: document.querySelector("#operatorRollStateSub"),
-  operatorSeriesCap: document.querySelector("#operatorSeriesCap"),
-  operatorSeriesCapSub: document.querySelector("#operatorSeriesCapSub"),
+  protocolHealthSub: document.querySelector("#protocolHealthSub"),
+  protocolHealthMode: document.querySelector("#protocolHealthMode"),
+  protocolHealthMarketDepth: document.querySelector("#protocolHealthMarketDepth"),
+  protocolHealthMarketDepthSub: document.querySelector("#protocolHealthMarketDepthSub"),
+  protocolHealthVaultUtil: document.querySelector("#protocolHealthVaultUtil"),
+  protocolHealthVaultUtilSub: document.querySelector("#protocolHealthVaultUtilSub"),
+  protocolHealthRollState: document.querySelector("#protocolHealthRollState"),
+  protocolHealthRollStateSub: document.querySelector("#protocolHealthRollStateSub"),
+  protocolHealthSeriesCap: document.querySelector("#protocolHealthSeriesCap"),
+  protocolHealthSeriesCapSub: document.querySelector("#protocolHealthSeriesCapSub"),
   strategyButtons: document.querySelectorAll(".strategy-button"),
   sideButtons: document.querySelectorAll(".side-button"),
   tradePresetButtons: document.querySelectorAll("[data-trade-preset]"),
@@ -1248,7 +1248,7 @@ function decodeAuctionHealth(raw) {
   };
 }
 
-async function readOperatorHealthState() {
+async function readProtocolHealthState() {
   if (!healthLensReady()) return null;
 
   const lens = contractAddress("healthLens");
@@ -1333,7 +1333,7 @@ async function refreshOnchainReads({ includeQuote = true, renderAfter = true } =
       readRollAuctionDirectory(),
       readSettlementState("steady"),
       readSettlementState("boosted"),
-      readOperatorHealthState(),
+      readProtocolHealthState(),
       includeQuote ? readActiveTradeQuote() : Promise.resolve(null),
     ];
     const [
@@ -1346,7 +1346,7 @@ async function refreshOnchainReads({ includeQuote = true, renderAfter = true } =
       auctionDirectory,
       steadySettlement,
       boostedSettlement,
-      operatorHealth,
+      protocolHealth,
       quote,
     ] =
       await Promise.allSettled(jobs);
@@ -1376,7 +1376,7 @@ async function refreshOnchainReads({ includeQuote = true, renderAfter = true } =
     if (boostedSettlement.status === "fulfilled" && boostedSettlement.value) {
       state.onchain.settlements.boosted = boostedSettlement.value;
     }
-    if (operatorHealth.status === "fulfilled") state.onchain.health = operatorHealth.value;
+    if (protocolHealth.status === "fulfilled") state.onchain.health = protocolHealth.value;
     if (quote.status === "fulfilled" && quote.value) state.onchain.quote = quote.value;
     state.onchain.lastRefresh = Date.now();
   } finally {
@@ -2439,7 +2439,7 @@ function updateSettlement() {
   }
 }
 
-function updateOperatorHealth() {
+function updateProtocolHealth() {
   const live = state.onchain.health?.source === "live" ? state.onchain.health : null;
   const lensPending = healthLensReady() && !live;
 
@@ -2456,22 +2456,22 @@ function updateOperatorHealth() {
       ? Math.min(...wrapperCaps.map((wrapper) => wrapper.remainingCapacity))
       : null;
 
-    els.operatorMode.textContent = "Live";
-    els.operatorSub.textContent = "Read from ProtocolHealthLens.";
-	    els.operatorMarketDepth.textContent = ethAmountText(totalDepth);
-	    els.operatorMarketDepthSub.textContent = `Steady ${ethAmountText(steadyDepth)} / Boosted ${ethAmountText(boostedDepth)}`;
-	    els.operatorVaultUtil.textContent = pct((live.lpVault.utilizationBps || 0) / 10000);
-	    els.operatorVaultUtilSub.textContent = live.lpVault.strategyActive
-	      ? `${ethAmountText(live.lpVault.activeStrategyEth)} active / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`
-	      : `${ethAmountText(live.lpVault.managedEth)} managed / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`;
-    els.operatorRollState.textContent = auctionOpen
+    els.protocolHealthMode.textContent = "Live";
+    els.protocolHealthSub.textContent = "Read from ProtocolHealthLens.";
+    els.protocolHealthMarketDepth.textContent = ethAmountText(totalDepth);
+    els.protocolHealthMarketDepthSub.textContent = `Steady ${ethAmountText(steadyDepth)} / Boosted ${ethAmountText(boostedDepth)}`;
+    els.protocolHealthVaultUtil.textContent = pct((live.lpVault.utilizationBps || 0) / 10000);
+    els.protocolHealthVaultUtilSub.textContent = live.lpVault.strategyActive
+      ? `${ethAmountText(live.lpVault.activeStrategyEth)} active / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`
+      : `${ethAmountText(live.lpVault.managedEth)} managed / share ${ethAmountText(live.lpVault.sharePriceEth || 1)}`;
+    els.protocolHealthRollState.textContent = auctionOpen
       ? `${ethAmountText(live.auction.remainingEth)} open`
       : rollingCount
         ? `${rollingCount} rolling`
         : pausedWrapperCount
           ? "Growth paused"
           : "Idle";
-    els.operatorRollStateSub.textContent = auctionOpen
+    els.protocolHealthRollStateSub.textContent = auctionOpen
       ? live.auction.resetEligible
         ? `Auction #${live.auction.auctionId.toString()} reset-ready`
         : `Auction #${live.auction.auctionId.toString()} at ${live.auction.currentPrice.toFixed(3)}x`
@@ -2480,8 +2480,8 @@ function updateOperatorHealth() {
         : pausedWrapperCount
           ? "A failed roll paused new deposits until a retry clears"
           : "No wrapper roll active";
-    els.operatorSeriesCap.textContent = capacity ? ethAmountText(capacity.launchCapEth) : `${pct((live.firstSeries.capUsedBps || 0) / 10000)} used`;
-    els.operatorSeriesCapSub.textContent = capacity
+    els.protocolHealthSeriesCap.textContent = capacity ? ethAmountText(capacity.launchCapEth) : `${pct((live.firstSeries.capUsedBps || 0) / 10000)} used`;
+    els.protocolHealthSeriesCapSub.textContent = capacity
       ? capacity.noSolverLaunch
         ? `${capacity.limiter} sets launch · scale ${ethAmountText(capacity.scaleCapEth)}`
         : `${capacity.limiter} limits · wrapper ${ethAmountText(wrapperCapacityLeft ?? capacity.stressCapEth)} left`
@@ -2493,27 +2493,27 @@ function updateOperatorHealth() {
   const auctionNeed = auctionRemainingEth("steady") + auctionRemainingEth("boosted");
   const rollingCount = Object.values(state.demoWrapperRolls).filter((roll) => roll.active).length;
 
-  els.operatorMode.textContent = lensPending ? "Syncing" : "Demo";
-  els.operatorSub.textContent = lensPending
+  els.protocolHealthMode.textContent = lensPending ? "Syncing" : "Demo";
+  els.protocolHealthSub.textContent = lensPending
     ? "Reading ProtocolHealthLens..."
     : "Simulation metrics for public roll health.";
-  els.operatorMarketDepth.textContent = ethAmountText(auctionNeed);
-  els.operatorMarketDepthSub.textContent = "Open roll demand";
-  els.operatorVaultUtil.textContent = pct(metrics.utilization);
-  els.operatorVaultUtilSub.textContent = `${ethValueText(metrics.requiredRisk)} risk / ${ethValueText(
+  els.protocolHealthMarketDepth.textContent = ethAmountText(auctionNeed);
+  els.protocolHealthMarketDepthSub.textContent = "Open roll demand";
+  els.protocolHealthVaultUtil.textContent = pct(metrics.utilization);
+  els.protocolHealthVaultUtilSub.textContent = `${ethValueText(metrics.requiredRisk)} risk / ${ethValueText(
     metrics.riskBudget,
   )} budget`;
-  els.operatorRollState.textContent = rollingCount ? `${rollingCount} rolling` : "Idle";
-  els.operatorRollStateSub.textContent = rollingCount ? "Demo wrapper roll active" : "No wrapper roll active";
-  els.operatorSeriesCap.textContent = ethValueText(metrics.startingCap);
-  els.operatorSeriesCapSub.textContent = "Demo safe starting capacity";
+  els.protocolHealthRollState.textContent = rollingCount ? `${rollingCount} rolling` : "Idle";
+  els.protocolHealthRollStateSub.textContent = rollingCount ? "Demo wrapper roll active" : "No wrapper roll active";
+  els.protocolHealthSeriesCap.textContent = ethValueText(metrics.startingCap);
+  els.protocolHealthSeriesCapSub.textContent = "Demo safe starting capacity";
 }
 
 function updateSolver() {
   updateAuctionRows();
   updateKeeper();
   updateSettlement();
-  updateOperatorHealth();
+  updateProtocolHealth();
 
   const auction = activeAuctionConfig();
   const remaining = auctionRemainingEth(state.activeAuction);

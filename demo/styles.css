@@ -1291,18 +1291,18 @@ body[data-product="boosted"] .sim-bar-row.is-selected {
 
 .keeper-card,
 .settlement-card,
-.operator-card {
+.protocol-health-card {
   grid-column: 1 / -1;
   min-height: 0;
 }
 
 .keeper-status-grid,
 .settlement-status-grid,
-.operator-status-grid {
+.protocol-health-status-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.operator-status-grid small {
+.protocol-health-status-grid small {
   display: block;
   margin-top: 6px;
   color: var(--muted);
