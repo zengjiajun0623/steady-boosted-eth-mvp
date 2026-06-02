@@ -173,6 +173,7 @@ ops/solver-model-spread.mjs: reference external solver model for price-edge and 
 ops/readiness-check.mjs: live manifest/RPC readiness gate for trader markets, LP vault, solver auctions, keepers, settlement wiring, and decentralized liveness
 ops/economic-stress-check.py: historical RLP/N-side stress gate for roll cost, capacity, and paired Boosted demand assumptions
 ops/capacity-policy.py: ETH-denominated launch cap gate from committed LP-vault capital, Boosted/solver demand, or explicit no-solver launch mode
+ops/vault-strategy-plan.mjs: deterministic ETH LP vault action plan for solver-first, vault-backstop, pause, shrink, or liquidity-required decisions
 ```
 
 Independent operators can inspect public roll state and get suggested keeper or
@@ -287,6 +288,23 @@ python3 ops/capacity-policy.py \
   --no-solver-launch \
   --strict
 ```
+
+Before a roll, turn the current quote, solver interest, and LP vault capital
+into an explicit vault strategy action:
+
+```bash
+node ops/vault-strategy-plan.mjs \
+  --target-steady-cap-eth 5 \
+  --target-roll-eth 5 \
+  --lp-vault-eth 50 \
+  --solver-fill-eth 0 \
+  --observed-roll-cost-bps 8.5 \
+  --no-solver-launch
+```
+
+The planner returns one of the product actions: clear with solvers, wait for
+solvers then vault-backstop, vault-only bootstrap, pause rolls, shrink capacity,
+or require more solver/Boosted liquidity.
 
 See `contracts_mvp.md` for the current contract surface and next build steps.
 See `deployment_mvp.md` for local and guarded Ethereum pilot deployment topology.

@@ -130,6 +130,7 @@ ops/mvp-acceptance.mjs          full local acceptance gate
 ops/readiness-check.mjs         live manifest readiness gate
 ops/keeper-decisions.mjs        public-state operator suggestions
 ops/keeper-runner.mjs           optional execution runner
+ops/vault-strategy-plan.mjs     deterministic vault strategy action planner
 ops/economic-stress-check.py    historical roll-cost stress gate
 ops/capacity-policy.py          ETH-denominated capacity gate
 ```
@@ -144,9 +145,10 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
 2. Vault strategy
 
-   Build better ETH LP vault strategy tooling around bid sizing, inventory
-   cleanup, solver-first delay, and risk reporting. The vault should remain the
-   transparent protocol liquidity engine, not a hidden discretionary bailout.
+   Extend the deterministic strategy planner into dashboard and keeper-runner
+   workflows around bid sizing, inventory cleanup, solver-first delay, and risk
+   reporting. The vault should remain the transparent protocol liquidity engine,
+   not a hidden discretionary bailout.
 
 3. Solver market
 

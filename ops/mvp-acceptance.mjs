@@ -18,6 +18,7 @@ const NODE_CHECKS = [
   "ops/mvp-acceptance.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",
+  "ops/vault-strategy-plan.mjs",
 ];
 
 const PYTHON_CHECKS = [
@@ -276,6 +277,28 @@ function buildSteps(args) {
         "--strict",
       ],
     });
+    steps.push({
+      area: "operators",
+      name: "ETH LP vault strategy smoke",
+      command: "node",
+      args: [
+        "ops/vault-strategy-plan.mjs",
+        "--target-steady-cap-eth",
+        "5",
+        "--target-roll-eth",
+        "5",
+        "--lp-vault-eth",
+        "50",
+        "--solver-fill-eth",
+        "0",
+        "--observed-roll-cost-bps",
+        "8.5",
+        "--no-solver-launch",
+        "--expect-action",
+        "vault-only-bootstrap",
+        "--strict",
+      ],
+    });
   }
 
   if (args.localLive) {
@@ -343,6 +366,7 @@ function printReport(report) {
   console.log("Covers:");
   console.log("- Trader: Steady/Boosted ETH buy/sell markets and demo trading surface.");
   console.log("- LP: ETH vault deposit/withdraw, roll backstop, inventory cleanup, return check, and capacity policy.");
+  console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and pause/shrink/liquidity-required planning.");
   console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, and keeper discovery.");
   console.log("- Rotation: historical 10 bps roll-cost gate plus a live 10 bps public roll smoke.");
   console.log("- Bootstrap: no-solver launch capacity gate with LP vault capital as the protocol liquidity engine.");

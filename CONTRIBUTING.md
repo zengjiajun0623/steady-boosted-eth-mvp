@@ -25,6 +25,16 @@ python3 ops/capacity-policy.py \
   --rlp-capital-ratio 10 \
   --no-solver-launch \
   --strict
+
+node ops/vault-strategy-plan.mjs \
+  --target-steady-cap-eth 5 \
+  --target-roll-eth 5 \
+  --lp-vault-eth 50 \
+  --solver-fill-eth 0 \
+  --observed-roll-cost-bps 8.5 \
+  --no-solver-launch \
+  --expect-action vault-only-bootstrap \
+  --strict
 ```
 
 GitHub Actions runs the full local-live acceptance gate on pushes and pull
