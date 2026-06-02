@@ -189,6 +189,10 @@ function checkEvidenceFile(checks, area, name, file, detail) {
     fail(checks, area, name, `${detail} Pass the evidence path explicitly.`);
     return;
   }
+  if (/(template|example|sample)/i.test(path.basename(file))) {
+    fail(checks, area, name, `${detail} Refusing placeholder evidence path: ${file}.`, { file });
+    return;
+  }
   if (!exists(file)) {
     fail(checks, area, name, `${detail} File not found: ${file}.`, { file });
     return;
