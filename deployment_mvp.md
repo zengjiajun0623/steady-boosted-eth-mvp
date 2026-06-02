@@ -431,6 +431,11 @@ settlement surfaces. The default gate warns if the LP vault has less than
 `0.1 ETH` managed because the Protocol ETH Liquidity Vault is the required
 trader route and roll backstop.
 
+Human-readable output starts with a short launch-posture summary for the five
+surfaces most likely to block a pilot: trader route, liquidity engine, roll
+safety, settlement, and no-admin/public execution. The detailed checklist still
+prints below that summary, and `--json` keeps the full machine-readable report.
+
 For a broader pre-launch check that includes the local contract suite, demo and
 runner syntax, Maker-style auction/reset paths, and historical capacity
 assumptions, run:

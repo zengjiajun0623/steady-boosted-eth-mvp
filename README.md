@@ -256,6 +256,10 @@ node ops/readiness-check.mjs \
   --rpc http://127.0.0.1:8545
 ```
 
+The human-readable readiness report starts with a launch-posture summary for
+trader route, liquidity engine, roll safety, settlement, and no-admin/public
+execution, then prints the full checklist underneath.
+
 For a production-style capacity check, pass committed Boosted/solver demand and
 make cap misses blocking:
 

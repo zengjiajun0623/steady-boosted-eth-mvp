@@ -1930,8 +1930,152 @@ function summarize(checks) {
   return { status, counts };
 }
 
+function levelRank(level) {
+  if (level === "fail") return 2;
+  if (level === "warn") return 1;
+  return 0;
+}
+
+function worstLevel(checks) {
+  return checks.reduce((level, check) => (levelRank(check.level) > levelRank(level) ? check.level : level), "pass");
+}
+
+function findCheck(checks, name) {
+  return checks.find((check) => check.name === name);
+}
+
+function matchingChecks(checks, names) {
+  return names.map((name) => findCheck(checks, name)).filter(Boolean);
+}
+
+function postureDetail(checks, okText) {
+  const problem = checks.find((check) => check.level === "fail") || checks.find((check) => check.level === "warn");
+  return problem ? `${problem.name}: ${problem.detail}` : okText;
+}
+
+function postureItem(checks, label, names, okText) {
+  const picked = matchingChecks(checks, names);
+  if (!picked.length) {
+    return {
+      label,
+      level: "warn",
+      detail: "No matching readiness checks were produced. Inspect manifest and RPC connectivity.",
+    };
+  }
+  return {
+    label,
+    level: worstLevel(picked),
+    detail: postureDetail(picked, okText),
+  };
+}
+
+function settlementPosture(checks) {
+  const medianNames = [
+    "series share one settlement oracle",
+    "settlement oracle exposes median source metadata",
+    "settlement oracle is bound to factory",
+    "settlement oracle has three stable sources",
+    "first series is registered in settlement oracle",
+    "second series is registered in settlement oracle",
+    "mainnet settlement oracle uses USDC USDT DAI median",
+    "settlement oracle satisfies required median gate",
+    "settlement oracle matches bounded median config",
+  ];
+  const medianChecks = matchingChecks(checks, medianNames);
+  const localMock = findCheck(checks, "non-mainnet settlement oracle accepted");
+  if (medianChecks.length > 1) {
+    return {
+      label: "Settlement",
+      level: worstLevel(medianChecks),
+      detail: postureDetail(
+        medianChecks,
+        "Median settlement is wired with registered series metadata and 3 stablecoin TWAP sources.",
+      ),
+    };
+  }
+  if (localMock) {
+    return {
+      label: "Settlement",
+      level: localMock.level,
+      detail: `Local/mock settlement accepted for this manifest mode. Use --require-median-oracle for staging or pilot checks.`,
+    };
+  }
+  return postureItem(
+    checks,
+    "Settlement",
+    ["series share one settlement oracle"],
+    "Series settlement oracle wiring is present.",
+  );
+}
+
+function buildLaunchPosture(result) {
+  const checks = result.checks;
+  return [
+    postureItem(
+      checks,
+      "Trader Route",
+      [
+        "Protocol ETH Liquidity Vault trade fee is readable",
+        "Protocol ETH Liquidity Vault has sample trade capacity",
+        "Steady ETH wrapper is open for vault-backed trading",
+        "Steady ETH vault-backed buy/sell quotes",
+        "Boosted ETH wrapper is open for vault-backed trading",
+        "Boosted ETH vault-backed buy/sell quotes",
+      ],
+      "Vault-backed Steady/Boosted buy and sell quotes are live.",
+    ),
+    postureItem(
+      checks,
+      "Liquidity Engine",
+      [
+        "LP vault manager is permissionless keeper",
+        "LP keeper is attached to vault",
+        "LP keeper only backstops protocol wrapper rolls",
+        "LP vault has starter capital",
+        "LP strategy caps are coherent",
+      ],
+      "ETH LP vault is funded, pinned to the keeper, and constrained by strategy caps.",
+    ),
+    postureItem(
+      checks,
+      "Roll Safety",
+      [
+        "LP backstop does not pay a normal-roll premium",
+        "LP backstop decay stays within normal-roll target",
+        "LP inventory sales cannot dump below normal-roll target",
+        "Steady ETH normal roll floor stays within target cost",
+        "Boosted ETH normal roll floor stays within target cost",
+        "Steady wrapper cap fits committed liquidity",
+        "Steady wrapper cap fits LP liquidity engine",
+        "Steady wrapper cap fits stress demand",
+        "Boosted wrapper cap fits LP backstop capital",
+      ],
+      "Normal roll floors, LP backstop policy, and capacity gates are inside the configured cheap-roll band.",
+    ),
+    settlementPosture(checks),
+    postureItem(
+      checks,
+      "No Admin / Public Execution",
+      [
+        "auction guardian is disabled",
+        "one-time deployment setup is closed",
+        "protocol liveness surface is permissionless",
+      ],
+      "No auction guardian is active, setup is pinned, and public entrypoints cover trading, LP, rolls, solvers, and settlement.",
+    ),
+  ];
+}
+
 function printReport(result) {
   console.log(`Readiness: ${result.status.toUpperCase()} (${result.counts.pass} pass, ${result.counts.warn} warn, ${result.counts.fail} fail)`);
+  const posture = buildLaunchPosture(result);
+  if (posture.length) {
+    console.log("");
+    console.log("LAUNCH POSTURE");
+    for (const item of posture) {
+      console.log(`- ${item.level.toUpperCase().padEnd(4)} ${item.label}: ${item.detail}`);
+    }
+  }
   for (const level of ["fail", "warn", "pass"]) {
     const checks = result.checks.filter((check) => check.level === level);
     if (!checks.length) continue;
