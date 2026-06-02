@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "asOf": "2026-06-02T00:00:00Z",
+  "commitments": [
+    {
+      "kind": "solver-float",
+      "counterparty": "Solver Desk A",
+      "amountEth": "150",
+      "status": "signed",
+      "evidence": "signed agreement hash 0x1111111111111111111111111111111111111111111111111111111111111111",
+      "expiresAt": "2099-01-01T00:00:00Z"
+    },
+    {
+      "kind": "boosted-demand",
+      "counterparty": "Boosted Buyer Pool A",
+      "amountEth": "3000",
+      "status": "funded",
+      "evidence": "escrow tx 0x2222222222222222222222222222222222222222222222222222222222222222",
+      "expiresAt": "2099-01-01T00:00:00Z"
+    }
+  ]
+}

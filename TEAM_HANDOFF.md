@@ -167,6 +167,8 @@ deployment_mvp.md               local and Ethereum pilot deployment topology
 oracle_settlement.md            settlement oracle notes
 decentralized_mvp.md            trust-minimized product design
 solver_market.md                solver onboarding and attribution guide
+evidence/solver-commitments.example.json
+                                structured commitment evidence shape
 demo/index.html                 demo surface
 demo/app.js                     demo interactions and simulated/live mode
 ops/mvp-acceptance.mjs          full local acceptance gate

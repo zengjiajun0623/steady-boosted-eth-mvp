@@ -15,7 +15,7 @@ function usage() {
 Required production evidence:
   --audit-report <path>          Final external audit report or audit evidence file
   --incident-runbook <path>      Incident response and emergency communications runbook
-  --solver-commitments <path>    Solver/liquidity commitment evidence
+  --solver-commitments <path>    Structured solver/liquidity commitment JSON evidence
   --boosted-demand-eth <eth>     Credible committed Boosted/N demand
   --solver-float-eth <eth>       Credible external solver balance sheet
 
@@ -41,7 +41,7 @@ Example:
     --rpc $MAINNET_RPC_URL \\
     --audit-report evidence/audit-final.md \\
     --incident-runbook ops/incident-runbook.md \\
-    --solver-commitments evidence/solver-commitments.md \\
+    --solver-commitments evidence/solver-commitments-final.json \\
     --boosted-demand-eth 5000 \\
     --solver-float-eth 250`;
 }
@@ -128,6 +128,20 @@ function positiveEth(value) {
   return Number(value) > 0;
 }
 
+function ethToWei(value) {
+  if (typeof value === "number") value = String(value);
+  if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value)) return null;
+  const [whole, rawFraction = ""] = value.split(".");
+  if (rawFraction.length > 18) return null;
+  return BigInt(whole) * 10n ** 18n + BigInt(rawFraction.padEnd(18, "0"));
+}
+
+function weiToEthText(value) {
+  const whole = value / 10n ** 18n;
+  const fraction = (value % 10n ** 18n).toString().padStart(18, "0").replace(/0+$/, "");
+  return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
+}
+
 function pass(checks, area, name, detail, meta = {}) {
   checks.push({ level: "pass", area, name, detail, meta });
 }
@@ -188,23 +202,23 @@ function checkSecurityStatus(checks) {
   }
 }
 
-function checkEvidenceFile(checks, area, name, file, detail) {
+function validateEvidenceFile(checks, area, name, file, detail) {
   if (!file) {
     fail(checks, area, name, `${detail} Pass the evidence path explicitly.`);
-    return;
+    return null;
   }
-  if (/(template|example|sample)/i.test(path.basename(file))) {
+  if (/(template|example|sample|schema)/i.test(path.basename(file))) {
     fail(checks, area, name, `${detail} Refusing placeholder evidence path: ${file}.`, { file });
-    return;
+    return null;
   }
   if (!exists(file)) {
     fail(checks, area, name, `${detail} File not found: ${file}.`, { file });
-    return;
+    return null;
   }
   const size = fs.statSync(resolveRepoPath(file)).size;
   if (size === 0) {
     fail(checks, area, name, `${detail} File is empty: ${file}.`, { file });
-    return;
+    return null;
   }
   const text = readText(file);
   const placeholderPatterns = [
@@ -228,9 +242,125 @@ function checkEvidenceFile(checks, area, name, file, detail) {
       `${detail} Evidence still looks like a placeholder or draft: ${placeholders.join(", ")}.`,
       { file, placeholders },
     );
+    return null;
+  }
+  return { text, size };
+}
+
+function checkEvidenceFile(checks, area, name, file, detail) {
+  const evidence = validateEvidenceFile(checks, area, name, file, detail);
+  if (!evidence) return;
+  const { size } = evidence;
+  pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
+}
+
+function checkSolverCommitments(checks, file, boostedDemandEth, solverFloatEth) {
+  const evidence = validateEvidenceFile(
+    checks,
+    "liquidity",
+    "solver and liquidity commitments",
+    file,
+    "Production requires structured solver/liquidity commitment evidence.",
+  );
+  if (!evidence) return;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(evidence.text);
+  } catch (error) {
+    fail(
+      checks,
+      "liquidity",
+      "solver and liquidity commitments",
+      `Solver/liquidity evidence must be JSON: ${error.message}.`,
+      { file },
+    );
     return;
   }
-  pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
+
+  const commitments = Array.isArray(parsed?.commitments) ? parsed.commitments : [];
+  if (parsed?.version !== 1 || commitments.length === 0) {
+    fail(
+      checks,
+      "liquidity",
+      "solver and liquidity commitments",
+      "Commitment evidence must include version: 1 and a non-empty commitments array.",
+      { file },
+    );
+    return;
+  }
+
+  const allowedKinds = new Set(["solver-float", "boosted-demand"]);
+  const allowedStatuses = new Set(["signed", "funded", "onchain-funded", "live"]);
+  const failures = [];
+  let solverFloatWei = 0n;
+  let boostedDemandWei = 0n;
+  const now = Date.now();
+
+  commitments.forEach((commitment, index) => {
+    const kind = String(commitment?.kind || "");
+    const status = String(commitment?.status || "");
+    const counterparty = String(commitment?.counterparty || "").trim();
+    const evidenceRef = String(commitment?.evidence || "").trim();
+    const amountWei = ethToWei(commitment?.amountEth);
+    const expiresAt = String(commitment?.expiresAt || "");
+    const expiryMs = Date.parse(expiresAt);
+
+    if (!allowedKinds.has(kind)) failures.push(`commitments[${index}].kind must be solver-float or boosted-demand`);
+    if (!allowedStatuses.has(status)) {
+      failures.push(`commitments[${index}].status must be signed, funded, onchain-funded, or live`);
+    }
+    if (counterparty.length < 2) failures.push(`commitments[${index}].counterparty is missing`);
+    if (!amountWei || amountWei <= 0n) failures.push(`commitments[${index}].amountEth must be positive`);
+    if (evidenceRef.length < 12) failures.push(`commitments[${index}].evidence needs a concrete reference`);
+    if (!Number.isFinite(expiryMs) || expiryMs <= now) {
+      failures.push(`commitments[${index}].expiresAt must be a future ISO timestamp`);
+    }
+
+    if (amountWei && amountWei > 0n && kind === "solver-float") solverFloatWei += amountWei;
+    if (amountWei && amountWei > 0n && kind === "boosted-demand") boostedDemandWei += amountWei;
+  });
+
+  const requiredBoostedWei = ethToWei(boostedDemandEth);
+  const requiredSolverWei = ethToWei(solverFloatEth);
+  if (requiredBoostedWei && boostedDemandWei < requiredBoostedWei) {
+    failures.push(
+      `boosted-demand total ${weiToEthText(boostedDemandWei)} ETH is below required ${weiToEthText(requiredBoostedWei)} ETH`,
+    );
+  }
+  if (requiredSolverWei && solverFloatWei < requiredSolverWei) {
+    failures.push(
+      `solver-float total ${weiToEthText(solverFloatWei)} ETH is below required ${weiToEthText(requiredSolverWei)} ETH`,
+    );
+  }
+
+  if (failures.length) {
+    fail(
+      checks,
+      "liquidity",
+      "solver and liquidity commitments",
+      failures.join("; "),
+      {
+        file,
+        solverFloatEth: weiToEthText(solverFloatWei),
+        boostedDemandEth: weiToEthText(boostedDemandWei),
+      },
+    );
+    return;
+  }
+
+  pass(
+    checks,
+    "liquidity",
+    "solver and liquidity commitments",
+    `Structured commitments cover ${weiToEthText(boostedDemandWei)} ETH Boosted demand and ${weiToEthText(solverFloatWei)} ETH solver float.`,
+    {
+      file,
+      commitments: commitments.length,
+      solverFloatEth: weiToEthText(solverFloatWei),
+      boostedDemandEth: weiToEthText(boostedDemandWei),
+    },
+  );
 }
 
 function checkManifest(checks, manifestPath) {
@@ -405,13 +535,7 @@ function main() {
     args.incidentRunbook,
     "Production requires an incident response runbook.",
   );
-  checkEvidenceFile(
-    checks,
-    "liquidity",
-    "solver and liquidity commitments",
-    args.solverCommitments,
-    "Production requires real solver/liquidity commitment evidence.",
-  );
+  checkSolverCommitments(checks, args.solverCommitments, args.boostedDemandEth, args.solverFloatEth);
 
   if (positiveEth(args.boostedDemandEth)) {
     pass(checks, "liquidity", "committed Boosted/N demand", `Boosted demand commitment: ${args.boostedDemandEth} ETH.`);

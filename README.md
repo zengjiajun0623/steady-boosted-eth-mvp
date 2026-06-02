@@ -390,7 +390,7 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
-  --solver-commitments evidence/solver-commitments.md \
+  --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250
 ```
@@ -401,6 +401,9 @@ incident response runbook, solver/liquidity commitments, mainnet oracle
 preflight, and strict live readiness all pass.
 The evidence files must be real final artifacts; the gate rejects empty files
 and obvious placeholder, example, TODO, or draft language.
+Solver/liquidity commitment evidence must be structured JSON matching
+`evidence/solver-commitments.example.json`, and its committed totals must cover
+the `--boosted-demand-eth` and `--solver-float-eth` values passed to the gate.
 
 Known gaps before real value:
 

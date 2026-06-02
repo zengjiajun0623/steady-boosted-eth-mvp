@@ -230,10 +230,14 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
-  --solver-commitments evidence/solver-commitments.md \
+  --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250
 ```
+
+Use `evidence/solver-commitments.example.json` as the shape for the final
+commitment file. The production gate sums `solver-float` and `boosted-demand`
+entries and rejects the file if either total is below the CLI amounts.
 
 `DeployEthereumPilot` is now a topology specification and test helper. Its
 runtime is intentionally large because it bundles deployment, topology getters,
