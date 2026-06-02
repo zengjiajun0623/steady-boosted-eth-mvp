@@ -97,6 +97,7 @@ contract ProtocolHealthLens {
         address rollNextToken;
         uint256 maxAssets;
         uint256 remainingCapacity;
+        bool depositsPaused;
     }
 
     struct SeriesHealth {
@@ -299,6 +300,7 @@ contract ProtocolHealthLens {
         health.manager = vault.manager();
         health.currentToken = address(vault.currentToken());
         health.rollActive = vault.rollActive();
+        health.depositsPaused = vault.depositsPaused();
         health.maxAssets = vault.maxAssets();
         health.remainingCapacity = vault.remainingCapacity();
         if (!health.rollActive) {

@@ -504,6 +504,7 @@ function decodeWrapperHealth(raw) {
     rollNextToken: decodeAddress(raw, 8),
     maxAssets: decodeUint(raw, 9),
     remainingCapacity: decodeUint(raw, 10),
+    depositsPaused: hasWords(raw, 12) ? decodeBool(raw, 11) : false,
   };
 }
 
@@ -1041,6 +1042,16 @@ function checkWrappers(checks, manifest, health, args) {
         remainingCapacity: wrapper.remainingCapacity,
         maxRollSellAmount: keeper.maxRollSellAmount,
       },
+    );
+    addCheck(
+      checks,
+      !wrapper.depositsPaused ? "pass" : "warn",
+      "sustainability",
+      `${label} deposit growth is open`,
+      wrapper.depositsPaused
+        ? `${label} deposits are paused after a failed or unresolved roll; existing redemptions and keeper roll retries remain available.`
+        : `${label} can accept deposits up to ${weiToEthText(wrapper.remainingCapacity)} of remaining capacity.`,
+      { depositsPaused: wrapper.depositsPaused, remainingCapacity: wrapper.remainingCapacity },
     );
     addCheck(
       checks,

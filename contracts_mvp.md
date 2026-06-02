@@ -217,6 +217,13 @@ left, the keeper can reset the Dutch curve for the remaining inventory. This
 borrows Maker's `redo` lesson: stale auctions should be permissionlessly
 restartable instead of leaving the product stuck.
 
+If an auction receives no fills and is cancelled after expiry, the wrapper
+automatically pauses new deposits. Existing holders can still redeem, and the
+keeper can retry the roll using the remaining current-token inventory. Deposits
+only reopen after a later roll finalizes successfully. This turns a failed
+cheap-roll attempt into a visible growth stop instead of letting the product
+accept more assets before liquidity has recovered.
+
 ### `SeriesExposureVaultKeeper`
 
 The wrapper keeper removes the centralized roll operator from Steady ETH and
@@ -562,6 +569,7 @@ marketHealth: AMM reserves, fee, and sample buy/sell quotes
 lpVaultHealth: managed assets, reserved ETH, strategy utilization, pause state,
 solver-first delay, auction freshness limits, and price-decay limits
 wrapperHealth: current token, total assets, capacity, active roll auction
+and deposit-growth pause state
 seriesHealth: cap usage, maturity, settlement state
 auctionHealth: Dutch price, remaining size, time left, token pair
 auctionPolicyHealth: guardian, circuit-breaker level, dust threshold, active auction count

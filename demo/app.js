@@ -1197,6 +1197,7 @@ function decodeWrapperHealth(raw) {
     rollNextToken: decodeAddress(raw, 8),
     maxAssets: weiToEth(decodeUint(raw, 9)),
     remainingCapacity: weiToEth(decodeUint(raw, 10)),
+    depositsPaused: hasWords(raw, 12) ? decodeBool(raw, 11) : false,
   };
 }
 
@@ -2447,6 +2448,7 @@ function updateOperatorHealth() {
     const boostedDepth = live.boostedMarket.hasLiquidity ? live.boostedMarket.ethReserve : 0;
     const totalDepth = steadyDepth + boostedDepth;
     const rollingCount = [live.steadyWrapper, live.boostedWrapper].filter((wrapper) => wrapper.rollActive).length;
+    const pausedWrapperCount = [live.steadyWrapper, live.boostedWrapper].filter((wrapper) => wrapper.depositsPaused).length;
     const auctionOpen = Boolean(live.auction?.open && live.auction?.active && !live.auction?.cancelled);
     const capacity = liveCapacityPolicy();
     const wrapperCaps = [live.steadyWrapper, live.boostedWrapper].filter((wrapper) => wrapper.maxAssets > 0);
@@ -2466,14 +2468,18 @@ function updateOperatorHealth() {
       ? `${ethAmountText(live.auction.remainingEth)} open`
       : rollingCount
         ? `${rollingCount} rolling`
-        : "Idle";
+        : pausedWrapperCount
+          ? "Growth paused"
+          : "Idle";
     els.operatorRollStateSub.textContent = auctionOpen
       ? live.auction.resetEligible
         ? `Auction #${live.auction.auctionId.toString()} reset-ready`
         : `Auction #${live.auction.auctionId.toString()} at ${live.auction.currentPrice.toFixed(3)}x`
       : rollingCount
         ? "Wrapper deposits paused while rolling"
-        : "No wrapper roll active";
+        : pausedWrapperCount
+          ? "A failed roll paused new deposits until a retry clears"
+          : "No wrapper roll active";
     els.operatorSeriesCap.textContent = capacity ? ethAmountText(capacity.launchCapEth) : `${pct((live.firstSeries.capUsedBps || 0) / 10000)} used`;
     els.operatorSeriesCapSub.textContent = capacity
       ? capacity.noSolverLaunch

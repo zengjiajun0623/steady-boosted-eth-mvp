@@ -255,6 +255,8 @@ contract SeriesExposureVaultKeeperTest {
         assertEq(caller.balance, callerBefore + KEEPER_REWARD);
         assertEq(steadyKeeper.pendingSeriesId(), bytes32(0));
         assertEq(steadyVault.rollActive() ? 1 : 0, 0);
+        assertEq(steadyVault.depositsPaused() ? 1 : 0, 1);
+        assertEq(steadyVault.remainingCapacity(), 0);
         vm.expectRevert(RollAuction.AuctionClosed.selector);
         auction.quote(auctionId, 1 ether);
     }

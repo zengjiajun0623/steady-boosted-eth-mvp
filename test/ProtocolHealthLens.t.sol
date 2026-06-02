@@ -60,6 +60,7 @@ contract ProtocolHealthLensTest {
         assertEq(wrapper.maxAssets, 5 ether);
         assertEq(wrapper.remainingCapacity, 4 ether);
         require(!wrapper.rollActive, "wrapper rolling");
+        require(!wrapper.depositsPaused, "wrapper deposits paused");
 
         ProtocolHealthLens.SeriesHealth memory series = lens.seriesHealth(factory, firstSeriesId);
         assertEq(series.seriesId, firstSeriesId);
@@ -125,6 +126,7 @@ contract ProtocolHealthLensTest {
         assertEq(wrapper.rollAuction, address(rollAuction));
         assertEq(wrapper.rollAuctionId, auctionId);
         assertNonzero(wrapper.rollNextToken);
+        require(!wrapper.depositsPaused, "wrapper deposits growth-paused");
 
         ProtocolHealthLens.AuctionHealth memory auction = lens.auctionHealth(rollAuction, auctionId);
         assertEq(auction.auction, address(rollAuction));
@@ -148,6 +150,24 @@ contract ProtocolHealthLensTest {
 
         ProtocolHealthLens.SeriesHealth memory firstSeries = lens.seriesHealth(_factory(deployer), firstSeriesId);
         assertEq(firstSeries.seriesId, firstSeriesId);
+    }
+
+    function testReadsWrapperDepositPauseAfterCancelledRoll() public {
+        DeployLocalMvp deployer = _seededLocalDeployment();
+        ProtocolHealthLens lens = deployer.healthLens();
+        (, bytes32 secondSeriesId,,,,) = deployer.series();
+        (SeriesExposureVault steadyVault,,,) = deployer.products();
+        (SeriesExposureVaultKeeper steadyKeeper,) = deployer.wrapperKeepers();
+
+        steadyKeeper.startRoll(secondSeriesId, 1 ether, 1e18, 0.999e18, 1 days);
+        vm.warp(block.timestamp + 1 days + 1);
+        steadyKeeper.cancelUnfilledRoll();
+
+        ProtocolHealthLens.WrapperHealth memory wrapper = lens.wrapperHealth(steadyVault);
+        require(wrapper.depositsPaused, "wrapper deposits not paused");
+        assertEq(wrapper.remainingCapacity, 0);
+        assertEq(wrapper.totalAssets, 1 ether);
+        require(!wrapper.rollActive, "wrapper still rolling");
     }
 
     function testReadsLpVaultInventoryHealth() public {

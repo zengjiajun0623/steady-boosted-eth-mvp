@@ -62,8 +62,9 @@ These are product invariants, not preferences.
 
 2. Normal rolls stay cheap.
    The default normal roll target is <= 10 bps. If cheap rolls cannot clear,
-   the protocol should pause, shrink capacity, or require more liquidity instead
-   of silently accepting expensive rotation.
+   the protocol should pause growth, shrink capacity, or require more liquidity
+   instead of silently accepting expensive rotation. A fully failed wrapper roll
+   automatically pauses new wrapper deposits until a later retry clears.
 
 3. Roll execution is public.
    External solvers bid into public roll auctions. There should be no exclusive

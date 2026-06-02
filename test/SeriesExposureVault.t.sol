@@ -177,6 +177,41 @@ contract SeriesExposureVaultTest {
         auction.quote(auctionId, 1 ether);
     }
 
+    function testCancelledRollPausesGrowthUntilSuccessfulRetry() public {
+        _deposit(steadyVault, oldP, 1 ether);
+        steadyVault.startRoll(auction, newP, 1 ether, 1e18, 1e18, 1 days);
+
+        steadyVault.cancelUnfilledRoll();
+        require(steadyVault.depositsPaused(), "deposits should pause");
+        assertEq(steadyVault.remainingCapacity(), 0);
+
+        vm.prank(user);
+        oldP.approve(address(steadyVault), 0.1 ether);
+        vm.prank(user);
+        vm.expectRevert(SeriesExposureVault.DepositsPaused.selector);
+        steadyVault.deposit(0.1 ether, 0, user);
+
+        vm.prank(user);
+        uint256 redeemed = steadyVault.redeem(0.1 ether, 0.1 ether, user);
+        assertEq(redeemed, 0.1 ether);
+
+        uint256 retryAuctionId = steadyVault.startRoll(auction, newP, 0.9 ether, 1e18, 1e18, 1 days);
+        vm.prank(solver);
+        newP.approve(address(auction), 0.9 ether);
+        vm.prank(solver);
+        auction.fill(retryAuctionId, 0.9 ether, 0.9 ether, solver);
+
+        steadyVault.finalizeRoll();
+        require(!steadyVault.depositsPaused(), "deposits should reopen");
+        assertEq(steadyVault.remainingCapacity(), CAP - 0.9 ether);
+
+        vm.prank(solver);
+        newP.approve(address(steadyVault), 0.1 ether);
+        vm.prank(solver);
+        uint256 shares = steadyVault.deposit(0.1 ether, 0, solver);
+        assertEq(shares, 0.1 ether);
+    }
+
     function testPartiallyFilledRollCannotBeCancelledOrFinalized() public {
         _deposit(steadyVault, oldP, 1 ether);
         uint256 auctionId = steadyVault.startRoll(auction, newP, 1 ether, 1e18, 1e18, 1 days);

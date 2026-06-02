@@ -145,7 +145,9 @@ market-making spread.
 
 In local-live mode the acceptance gate also runs an explicit local manifest
 readiness step, including negative probes that must reject an unpinned LP roll
-seller topology and a nonzero auction guardian by default. This tests the same
+seller topology and a nonzero auction guardian by default. Readiness also makes
+wrapper deposit-growth pauses visible, so a failed cheap roll stops new capacity
+instead of being hidden behind normal UX. This tests the same
 `ops/readiness-check.mjs` path even when no external RPC is provided.
 
 GitHub Actions runs the same local-live acceptance gate on pushes and pull

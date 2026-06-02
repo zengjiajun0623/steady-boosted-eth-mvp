@@ -301,7 +301,7 @@ lpInventoryHealth(...) -> tracked LP vault P/N balances, mergeable paired amount
 unpaired exposure, and maturity/settlement state
 lpAccountHealth(...) -> LP share balance, current claimable assets, pending
 withdrawal amount, unlock time, and claimable flag
-wrapperHealth(...) -> current token, capacity, roll state, active roll auction id
+wrapperHealth(...) -> current token, capacity, deposit-growth pause state, roll state, active roll auction id
 seriesHealth(...) -> cap usage, maturity, settlement state
 auctionHealth(...) -> seller, tokens, current Dutch price, remaining size, time left,
 and Maker-style reset readiness from expiry or stale price decay

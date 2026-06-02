@@ -8,12 +8,14 @@ import {MintBurnToken} from "../token/MintBurnToken.sol";
 /// @dev Deploy one vault for Steady ETH (`P` exposure) and one for Boosted ETH
 /// (`N` exposure). Deposits and redemptions pause during rolls so share
 /// accounting never depends on a trusted mark-to-market price for mixed series.
+/// A fully failed roll pauses deposit growth until a later successful roll clears.
 contract SeriesExposureVault {
     MintBurnToken public immutable share;
     address public immutable manager;
     uint256 public immutable maxAssets;
     MintBurnToken public currentToken;
     bool public rollActive;
+    bool public depositsPaused;
 
     struct RollState {
         RollAuction auction;
@@ -34,6 +36,7 @@ contract SeriesExposureVault {
     event RollReset(uint256 indexed auctionId, uint256 startPriceWad, uint256 endPriceWad, uint64 duration);
     event RollFinalized(address indexed newToken);
     event RollCancelled(uint256 indexed auctionId);
+    event DepositsPausedSet(bool paused);
 
     error InvalidConfig();
     error InvalidRecipient();
@@ -46,6 +49,7 @@ contract SeriesExposureVault {
     error PartialRoll();
     error PartialFillCannotCancel();
     error CapacityExceeded();
+    error DepositsPaused();
     error TokenTransferFailed();
 
     constructor(
@@ -85,6 +89,7 @@ contract SeriesExposureVault {
         returns (uint256 shares)
     {
         if (rollActive) revert RollActive();
+        if (depositsPaused) revert DepositsPaused();
         if (recipient == address(0)) revert InvalidRecipient();
         if (assets == 0) revert ZeroAmount();
         uint256 assetsBefore = currentToken.balanceOf(address(this));
@@ -165,6 +170,10 @@ contract SeriesExposureVault {
         currentToken = roll.nextToken;
         delete roll;
         rollActive = false;
+        if (depositsPaused) {
+            depositsPaused = false;
+            emit DepositsPausedSet(false);
+        }
 
         emit RollFinalized(address(currentToken));
     }
@@ -188,6 +197,10 @@ contract SeriesExposureVault {
         roll.auction.cancel(auctionId);
         delete roll;
         rollActive = false;
+        if (!depositsPaused) {
+            depositsPaused = true;
+            emit DepositsPausedSet(true);
+        }
 
         emit RollCancelled(auctionId);
     }
@@ -211,7 +224,7 @@ contract SeriesExposureVault {
     }
 
     function remainingCapacity() external view returns (uint256) {
-        if (rollActive) return 0;
+        if (rollActive || depositsPaused) return 0;
 
         uint256 assets = currentToken.balanceOf(address(this));
         return assets >= maxAssets ? 0 : maxAssets - assets;
