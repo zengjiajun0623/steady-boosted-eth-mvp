@@ -126,7 +126,7 @@ function parseArgs(argv) {
   return args;
 }
 
-function runStep({ area, name, command, args }) {
+function runStep({ area, name, command, args, expectFailure = false }) {
   const started = Date.now();
   const child = spawnSync(command, args, {
     cwd: ROOT,
@@ -136,7 +136,9 @@ function runStep({ area, name, command, args }) {
   const elapsedMs = Date.now() - started;
   const stdout = child.stdout || "";
   const stderr = child.stderr || "";
-  const status = child.status === 0 ? "pass" : "fail";
+  const failed = child.status !== 0;
+  const status = expectFailure ? (failed ? "pass" : "fail") : (failed ? "fail" : "pass");
+  const summary = outputSummary(stdout, stderr, status);
 
   return {
     area,
@@ -145,7 +147,11 @@ function runStep({ area, name, command, args }) {
     command: [command, ...args].join(" "),
     elapsedMs,
     code: child.status,
-    summary: outputSummary(stdout, stderr, status),
+    summary: expectFailure
+      ? (failed
+        ? `Expected failure observed.\n${summary}`.trim()
+        : `Expected command to fail, but it exited 0.\n${summary}`.trim())
+      : summary,
   };
 }
 
@@ -299,6 +305,29 @@ function buildSteps(args) {
         "--strict",
       ],
     });
+    steps.push({
+      area: "operators",
+      name: "ETH LP vault rejects expensive roll smoke",
+      command: "node",
+      expectFailure: true,
+      args: [
+        "ops/vault-strategy-plan.mjs",
+        "--target-steady-cap-eth",
+        "5",
+        "--target-roll-eth",
+        "5",
+        "--lp-vault-eth",
+        "50",
+        "--solver-fill-eth",
+        "0",
+        "--observed-roll-cost-bps",
+        "15",
+        "--no-solver-launch",
+        "--expect-action",
+        "pause-rolls",
+        "--strict",
+      ],
+    });
   }
 
   if (args.localLive) {
@@ -366,7 +395,7 @@ function printReport(report) {
   console.log("Covers:");
   console.log("- Trader: Steady/Boosted ETH buy/sell markets and demo trading surface.");
   console.log("- LP: ETH vault deposit/withdraw, roll backstop, inventory cleanup, return check, and capacity policy.");
-  console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and pause/shrink/liquidity-required planning.");
+  console.log("- Vault strategy: solver-first, vault-backstop, vault-only bootstrap, and expensive-roll rejection.");
   console.log("- Solver: public Dutch roll auctions, callback fills, fill-all paths, and keeper discovery.");
   console.log("- Rotation: historical 10 bps roll-cost gate plus a live 10 bps public roll smoke.");
   console.log("- Bootstrap: no-solver launch capacity gate with LP vault capital as the protocol liquidity engine.");
