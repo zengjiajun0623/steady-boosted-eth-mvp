@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "status": "active",
+  "launchedAt": "2026-06-02T00:00:00Z",
+  "intakeUrl": "https://security.example.com/steady-boosted-eth",
+  "email": "security@example.com",
+  "contacts": [
+    {
+      "name": "Security Lead",
+      "role": "incident lead",
+      "contact": "security-lead@example.com"
+    },
+    {
+      "name": "Protocol Lead",
+      "role": "engineering lead",
+      "contact": "protocol-lead@example.com"
+    }
+  ],
+  "scope": [
+    "smart-contracts",
+    "frontend-wallet",
+    "deployment-ops"
+  ],
+  "sla": {
+    "responseHours": 48,
+    "criticalTriageHours": 12
+  },
+  "bounty": {
+    "active": true,
+    "policyUrl": "https://security.example.com/steady-boosted-eth/policy",
+    "rewardsDefined": true
+  }
+}

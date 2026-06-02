@@ -168,6 +168,8 @@ audit_scope.md                  external audit scope and invariant checklist
 oracle_settlement.md            settlement oracle notes
 decentralized_mvp.md            trust-minimized product design
 solver_market.md                solver onboarding and attribution guide
+evidence/security-intake.example.json
+                                structured vulnerability intake evidence shape
 evidence/solver-commitments.example.json
                                 structured commitment evidence shape
 demo/index.html                 demo surface

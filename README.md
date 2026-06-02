@@ -392,6 +392,7 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
+  --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250
@@ -399,10 +400,13 @@ node ops/production-readiness.mjs \
 
 That gate intentionally fails today. It should keep failing until the full
 local acceptance suite, a real production manifest, external audit evidence,
-incident response runbook, solver/liquidity commitments, mainnet oracle
-preflight, and strict live readiness all pass.
+incident response runbook, active vulnerability intake, solver/liquidity
+commitments, mainnet oracle preflight, and strict live readiness all pass.
 The evidence files must be real final artifacts; the gate rejects empty files
 and obvious placeholder, example, TODO, or draft language.
+Security intake evidence must be structured JSON matching
+`evidence/security-intake.example.json`, with an active intake route, named
+contacts, scope coverage, triage SLAs, and a live bounty or equivalent policy.
 Solver/liquidity commitment evidence must be structured JSON matching
 `evidence/solver-commitments.example.json`, and its committed totals must cover
 the `--boosted-demand-eth` and `--solver-float-eth` values passed to the gate.

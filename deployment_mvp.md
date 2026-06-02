@@ -230,11 +230,15 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
+  --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250
 ```
 
+Use `evidence/security-intake.example.json` as the shape for the final
+vulnerability intake file. The production gate rejects inactive programs,
+missing contacts, missing scope, loose triage SLAs, and placeholder evidence.
 Use `evidence/solver-commitments.example.json` as the shape for the final
 commitment file. The production gate sums `solver-float` and `boosted-demand`
 entries and rejects the file if either total is below the CLI amounts.

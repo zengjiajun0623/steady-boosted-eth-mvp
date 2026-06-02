@@ -15,6 +15,7 @@ function usage() {
 Required production evidence:
   --audit-report <path>          Final external audit report or audit evidence file
   --incident-runbook <path>      Incident response and emergency communications runbook
+  --security-intake <path>       Structured vulnerability intake / bug bounty JSON evidence
   --solver-commitments <path>    Structured solver/liquidity commitment JSON evidence
   --boosted-demand-eth <eth>     Credible committed Boosted/N demand
   --solver-float-eth <eth>       Credible external solver balance sheet
@@ -33,6 +34,7 @@ Environment fallbacks:
   PRODUCTION_MANIFEST
   PRODUCTION_AUDIT_REPORT
   PRODUCTION_INCIDENT_RUNBOOK
+  PRODUCTION_SECURITY_INTAKE
   PRODUCTION_SOLVER_COMMITMENTS
 
 Example:
@@ -41,6 +43,7 @@ Example:
     --rpc $MAINNET_RPC_URL \\
     --audit-report evidence/audit-final.md \\
     --incident-runbook ops/incident-runbook.md \\
+    --security-intake evidence/security-intake-final.json \\
     --solver-commitments evidence/solver-commitments-final.json \\
     --boosted-demand-eth 5000 \\
     --solver-float-eth 250`;
@@ -52,6 +55,7 @@ function parseArgs(argv) {
     rpc: process.env.MAINNET_RPC_URL || process.env.RPC_URL || "",
     auditReport: process.env.PRODUCTION_AUDIT_REPORT || "",
     incidentRunbook: process.env.PRODUCTION_INCIDENT_RUNBOOK || "",
+    securityIntake: process.env.PRODUCTION_SECURITY_INTAKE || "",
     solverCommitments: process.env.PRODUCTION_SOLVER_COMMITMENTS || "",
     boostedDemandEth: "",
     solverFloatEth: "",
@@ -81,6 +85,8 @@ function parseArgs(argv) {
       args.auditReport = next();
     } else if (arg === "--incident-runbook") {
       args.incidentRunbook = next();
+    } else if (arg === "--security-intake") {
+      args.securityIntake = next();
     } else if (arg === "--solver-commitments") {
       args.solverCommitments = next();
     } else if (arg === "--boosted-demand-eth") {
@@ -252,6 +258,81 @@ function checkEvidenceFile(checks, area, name, file, detail) {
   if (!evidence) return;
   const { size } = evidence;
   pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
+}
+
+function checkSecurityIntake(checks, file) {
+  const evidence = validateEvidenceFile(
+    checks,
+    "security",
+    "vulnerability intake and bounty",
+    file,
+    "Production requires active vulnerability intake / bug bounty evidence.",
+  );
+  if (!evidence) return;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(evidence.text);
+  } catch (error) {
+    fail(
+      checks,
+      "security",
+      "vulnerability intake and bounty",
+      `Security intake evidence must be JSON: ${error.message}.`,
+      { file },
+    );
+    return;
+  }
+
+  const failures = [];
+  const contacts = Array.isArray(parsed?.contacts) ? parsed.contacts : [];
+  const scope = Array.isArray(parsed?.scope) ? parsed.scope.map((item) => String(item)) : [];
+  const bounty = parsed?.bounty || {};
+  const sla = parsed?.sla || {};
+  const launchedAtMs = Date.parse(String(parsed?.launchedAt || ""));
+  const responseSlaHours = Number(sla.responseHours);
+  const criticalTriageHours = Number(sla.criticalTriageHours);
+  const hasIntakeRoute = Boolean(
+    String(parsed?.intakeUrl || "").startsWith("https://") || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(parsed?.email || "")),
+  );
+
+  if (parsed?.version !== 1) failures.push("version must be 1");
+  if (parsed?.status !== "active") failures.push("status must be active");
+  if (!Number.isFinite(launchedAtMs) || launchedAtMs > Date.now()) {
+    failures.push("launchedAt must be an ISO timestamp in the past");
+  }
+  if (!hasIntakeRoute) failures.push("intakeUrl must be https:// or email must be valid");
+  if (contacts.length < 2) failures.push("at least two security contacts are required");
+  contacts.forEach((contact, index) => {
+    if (!String(contact?.name || "").trim()) failures.push(`contacts[${index}].name is missing`);
+    if (!String(contact?.role || "").trim()) failures.push(`contacts[${index}].role is missing`);
+    if (!String(contact?.contact || "").trim()) failures.push(`contacts[${index}].contact is missing`);
+  });
+  for (const requiredScope of ["smart-contracts", "frontend-wallet", "deployment-ops"]) {
+    if (!scope.includes(requiredScope)) failures.push(`scope must include ${requiredScope}`);
+  }
+  if (!Number.isFinite(responseSlaHours) || responseSlaHours <= 0 || responseSlaHours > 72) {
+    failures.push("sla.responseHours must be > 0 and <= 72");
+  }
+  if (!Number.isFinite(criticalTriageHours) || criticalTriageHours <= 0 || criticalTriageHours > 24) {
+    failures.push("sla.criticalTriageHours must be > 0 and <= 24");
+  }
+  if (bounty.active !== true) failures.push("bounty.active must be true");
+  if (!String(bounty.policyUrl || "").startsWith("https://")) failures.push("bounty.policyUrl must be https://");
+  if (bounty.rewardsDefined !== true) failures.push("bounty.rewardsDefined must be true");
+
+  if (failures.length) {
+    fail(checks, "security", "vulnerability intake and bounty", failures.join("; "), { file });
+    return;
+  }
+
+  pass(
+    checks,
+    "security",
+    "vulnerability intake and bounty",
+    `Active intake with ${contacts.length} contacts, ${scope.length} scope areas, ${responseSlaHours}h response SLA, and ${criticalTriageHours}h critical triage SLA.`,
+    { file, contactCount: contacts.length, scope },
+  );
 }
 
 function checkSolverCommitments(checks, file, boostedDemandEth, solverFloatEth) {
@@ -535,6 +616,7 @@ function main() {
     args.incidentRunbook,
     "Production requires an incident response runbook.",
   );
+  checkSecurityIntake(checks, args.securityIntake);
   checkSolverCommitments(checks, args.solverCommitments, args.boostedDemandEth, args.solverFloatEth);
 
   if (positiveEth(args.boostedDemandEth)) {

@@ -23,6 +23,7 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
+  --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth 5000 \
   --solver-float-eth 250
@@ -33,6 +34,9 @@ the local product works; the production gate re-runs that acceptance suite and
 also requires external safety evidence and a live mainnet-ready deployment
 manifest. Evidence files must be real final artifacts, not placeholders,
 examples, TODO notes, or draft-only documents.
+Vulnerability intake evidence must be active structured JSON with an intake
+route, two contacts, product scope, triage SLAs, and a live bounty or equivalent
+policy.
 Solver/liquidity evidence must be structured JSON with signed or funded
 commitments that cover the demand and solver-float amounts passed to the gate.
 

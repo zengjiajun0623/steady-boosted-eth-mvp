@@ -68,6 +68,7 @@ node ops/production-readiness.mjs \
   --rpc $MAINNET_RPC_URL \
   --audit-report evidence/audit-final.md \
   --incident-runbook ops/incident-runbook.md \
+  --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
   --boosted-demand-eth <BOOSTED_DEMAND_ETH> \
   --solver-float-eth <SOLVER_FLOAT_ETH>
@@ -80,5 +81,5 @@ External audit evidence must be final.
 Production manifest must pass strict live mainnet readiness.
 Solver/liquidity commitments must be structured, signed or funded, unexpired, and large enough to cover the CLI capacity amounts.
 Incident response ownership and user communications must be assigned before real funds.
-Bug bounty or equivalent vulnerability intake must be active before public-fund scale.
+Bug bounty or equivalent vulnerability intake must be active, structured, and evidenced before public-fund scale.
 ```
