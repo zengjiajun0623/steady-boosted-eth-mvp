@@ -532,8 +532,45 @@ function hasDeployManifest() {
   );
 }
 
+function normalizedChainId(chainId) {
+  if (typeof chainId !== "string" || !chainId) return null;
+  if (!chainId.startsWith("0x")) return null;
+  try {
+    return `0x${BigInt(chainId).toString(16)}`;
+  } catch {
+    return null;
+  }
+}
+
+function manifestChainId() {
+  return normalizedChainId(state.contracts.manifest?.chainId);
+}
+
+function walletChainId() {
+  return normalizedChainId(state.contracts.chainId);
+}
+
+function walletChainMatchesManifest() {
+  if (!hasDeployManifest()) return false;
+  const expected = manifestChainId();
+  const actual = walletChainId();
+  return Boolean(expected && actual && expected === actual);
+}
+
+function walletChainMismatch() {
+  return Boolean(state.contracts.account && hasDeployManifest() && !walletChainMatchesManifest());
+}
+
+function chainMismatchText() {
+  const expected = manifestChainId();
+  const actual = walletChainId();
+  if (!expected) return "Manifest is missing a chain id. Export a fresh deployed manifest before live actions.";
+  if (!actual) return `Wallet network unknown. Switch to ${chainLabel(expected)}.`;
+  return `Wallet is on ${chainLabel(actual)}. Switch to ${chainLabel(expected)} for this deployment.`;
+}
+
 function onchainReady() {
-  return Boolean(state.contracts.account && hasDeployManifest());
+  return Boolean(state.contracts.account && hasDeployManifest() && walletChainMatchesManifest());
 }
 
 function healthLensReady() {
@@ -594,7 +631,7 @@ function liveAuctionReady() {
   const fillMode =
     liveAuction?.fillMode || (state.activeAuction === "boosted" ? "mintAndFillNWithCallback" : "mintAndFillWithCallback");
   const hasBase = Boolean(
-    state.contracts.account &&
+    onchainReady() &&
       activeAuctionId() !== null &&
       isAddress(contractAddress("rollAuction")) &&
       (fillMode === "directFill" || isAddress(contractAddress("factory"))) &&
@@ -622,8 +659,13 @@ function shortBytes32(value) {
 }
 
 function chainLabel(chainId) {
-  if (!chainId) return "Local demo";
-  return `Chain ${Number.parseInt(chainId, 16)}`;
+  const normalized = normalizedChainId(chainId);
+  if (!normalized) return "Local demo";
+  const labels = {
+    "0x1": "Ethereum mainnet",
+    "0x7a69": "Local Anvil",
+  };
+  return labels[normalized] || `Chain ${Number.parseInt(normalized, 16)}`;
 }
 
 function decimalToWei(value) {
@@ -1385,6 +1427,7 @@ async function connectWallet() {
 
 async function sendTransaction(tx) {
   if (!state.contracts.account || !window.ethereum) throw new Error("Wallet not connected");
+  if (walletChainMismatch()) throw new Error(chainMismatchText());
   return window.ethereum.request({
     method: "eth_sendTransaction",
     params: [{ from: state.contracts.account, ...tx }],
@@ -1402,12 +1445,20 @@ function renderConnectionStatus() {
   } else if (!connected) {
     els.connectionMode.textContent = "Contracts loaded";
     els.connectionStatus.textContent = "Connect wallet to use deployed markets";
+  } else if (walletChainMismatch()) {
+    els.connectionMode.textContent = "Wrong network";
+    els.connectionStatus.textContent = chainMismatchText();
   } else {
     els.connectionMode.textContent = "Wallet connected";
     els.connectionStatus.textContent = shortAddress(state.contracts.account);
   }
 
-  els.contractNetwork.textContent = chainLabel(state.contracts.chainId || state.contracts.manifest?.chainId);
+  const expected = manifestChainId();
+  const actual = walletChainId();
+  els.contractNetwork.textContent =
+    expected && actual && expected !== actual
+      ? `${chainLabel(actual)} / needs ${chainLabel(expected)}`
+      : chainLabel(actual || expected);
   els.connectWallet.textContent = connected ? shortAddress(state.contracts.account) : "Connect wallet";
   els.connectWallet.disabled = !state.contracts.walletAvailable;
 }
@@ -1825,7 +1876,8 @@ function updateTradeTicket() {
   const quote = currentQuote();
   const isBuy = state.tradeSide === "buy";
   const available = availableBalance();
-  const canTrade = quote.amount > 0 && quote.amount <= available;
+  const chainBlocked = walletChainMismatch();
+  const canTrade = quote.amount > 0 && quote.amount <= available && !chainBlocked;
   const liquidity = liquidityMetrics();
 
   document.body.dataset.side = state.tradeSide;
@@ -1853,7 +1905,9 @@ function updateTradeTicket() {
   els.seriesRoll.textContent = series.roll;
   els.tradeAction.textContent = `${isBuy ? "Buy" : "Sell"} ${productLabel}`;
   els.tradeAction.disabled = !canTrade;
-  if (!canTrade) {
+  if (chainBlocked) {
+    els.tradeStatus.textContent = chainMismatchText();
+  } else if (!canTrade) {
     const neededAsset = isBuy ? "ETH" : productLabel;
     els.tradeStatus.textContent = `Not enough ${neededAsset} for this trade.`;
   } else if (onchainReady() && quote.source !== "live") {
@@ -2092,6 +2146,7 @@ function updateLp() {
   const liveBalances = onchainReady() ? state.onchain.balances : null;
   const isWithdraw = lpIsWithdrawMode();
   const pending = currentLpPendingRequest();
+  const chainBlocked = walletChainMismatch();
   clampLpAmount();
   const capitalEth = lpCapitalEth();
   const capital = lpCapitalUsd();
@@ -2174,14 +2229,17 @@ function updateLp() {
   }
   const canPrimaryAction =
     capitalEth > 0 &&
+    !chainBlocked &&
     (!isWithdraw || capitalEth <= lpDepositEth) &&
     (!isWithdraw || !liveLp?.strategyActive) &&
     (isWithdraw || !liveBalances || capitalEth <= Math.max(0, liveBalances.eth - 0.01));
   els.lpAction.disabled = !canPrimaryAction;
   els.lpAction.textContent = isWithdraw ? "Request Withdrawal" : "Deposit ETH";
-  els.lpClaimAction.disabled = !pendingReady || (hasDeployManifest() && !state.contracts.account);
+  els.lpClaimAction.disabled = !pendingReady || chainBlocked || (hasDeployManifest() && !state.contracts.account);
 
-  if (isWithdraw && hasDeployManifest() && !state.contracts.account) {
+  if (chainBlocked) {
+    els.lpStatus.textContent = chainMismatchText();
+  } else if (isWithdraw && hasDeployManifest() && !state.contracts.account) {
     els.lpStatus.textContent = "Connect wallet to request a vault withdrawal.";
   } else if (isWithdraw && onchainReady() && liveLp?.strategyActive) {
     els.lpStatus.textContent = `Withdraw requests pause while ${ethAmountText(liveLp.activeStrategyEth)} is in strategy.`;
@@ -2241,23 +2299,26 @@ function updateKeeper() {
   const nextSeriesId = keeperNextSeriesId();
   const policy = keeperPolicyText(config);
   const liveReady = liveKeeperReady();
+  const chainBlocked = walletChainMismatch();
   const rollActive = live ? live.rollActive : demo.active;
   const inventoryEth = live ? live.inventoryEth : rollActive ? 0 : auctionRemainingEth(state.activeAuction);
   const auctionId = live?.auctionId ?? demo.auctionId;
   const remaining = live?.auction?.remainingEth ?? (rollActive ? auctionRemainingEth(state.activeAuction) : 0);
-  const canStart = liveReady ? !rollActive && inventoryEth > 0 : !rollActive && inventoryEth > 0;
-  const canFinalize = liveReady ? Boolean(rollActive && live?.auction && live.auction.remainingEth <= 0) : rollActive;
+  const canStart = !chainBlocked && (liveReady ? !rollActive && inventoryEth > 0 : !rollActive && inventoryEth > 0);
+  const canFinalize = !chainBlocked && (liveReady ? Boolean(rollActive && live?.auction && live.auction.remainingEth <= 0) : rollActive);
   const canCancel = liveReady
     ? Boolean(
+        !chainBlocked &&
         rollActive &&
           live?.auction &&
           live.auction.buyRaisedEth <= 0 &&
           live.auction.remainingEth > 0 &&
           live.auction.timeLeftSeconds === 0,
       )
-    : rollActive && !demo.filled;
+    : !chainBlocked && rollActive && !demo.filled;
   const canReset = liveReady
     ? Boolean(
+        !chainBlocked &&
         rollActive &&
           live?.auction &&
           live.auction.remainingEth > 0 &&
@@ -2285,7 +2346,9 @@ function updateKeeper() {
   els.keeperFinalizeRoll.textContent = liveReady ? "Finalize" : "Simulate finalize";
   els.keeperCancelRoll.textContent = liveReady ? "Cancel" : "Simulate cancel";
 
-  if (liveReady && canReset) {
+  if (chainBlocked) {
+    els.keeperStatus.textContent = chainMismatchText();
+  } else if (liveReady && canReset) {
     const resetReason = live.auction.resetPriceStale ? "price curve is stale" : "auction expired";
     els.keeperStatus.textContent = `Reset ready: ${resetReason}, ${ethAmountText(live.auction.remainingEth)} left.`;
   } else if (liveReady && rollActive && live?.auction?.remainingEth > 0) {
@@ -2311,6 +2374,7 @@ function updateSettlement() {
   const isLive = Boolean(live);
   const settled = Boolean(live?.settled);
   const matured = Boolean(live?.matured);
+  const chainBlocked = walletChainMismatch();
   const balanceEth = live?.balanceEth || 0;
   const redeemableEth = live?.redeemableEth || 0;
   const mergeableEth = live?.mergeableEth || 0;
@@ -2363,6 +2427,8 @@ function updateSettlement() {
     els.settlementStatus.textContent = "Series is mature, but settlement price is not available yet.";
   } else if (isLive) {
     els.settlementStatus.textContent = "Series has not reached maturity yet.";
+  } else if (chainBlocked) {
+    els.settlementStatus.textContent = chainMismatchText();
   } else if (onchainReady()) {
     els.settlementStatus.textContent = "Manifest is missing factory or series data for settlement.";
   } else if (hasDeployManifest()) {
@@ -2456,6 +2522,7 @@ function updateSolver() {
   const edge = auctionEdgeBps(price);
   const pairedInventory = pay;
   const directRoute = liveAuctionReady() && auction.live?.fillMode === "directFill";
+  const chainBlocked = walletChainMismatch();
 
   els.solverTitle.textContent = auction.title;
   els.solverSub.textContent = auction.helper;
@@ -2477,10 +2544,12 @@ function updateSolver() {
     ? "Use an existing next-token balance to fill this lot."
     : "Mint the next pair and pay the auction in one transaction.";
   els.solverInventory.textContent = auction.pairedInventory;
-  els.solverAction.disabled = remaining <= 0 || fill <= 0;
+  els.solverAction.disabled = chainBlocked || remaining <= 0 || fill <= 0;
   els.solverAction.textContent = liveAuctionReady() ? "Submit bid" : "Simulate bid";
 
-  if (remaining <= 0) {
+  if (chainBlocked) {
+    els.solverStatus.textContent = chainMismatchText();
+  } else if (remaining <= 0) {
     els.solverStatus.textContent = "Auction filled in the demo.";
   } else if (liveAuctionReady()) {
     els.solverStatus.textContent =
@@ -3060,6 +3129,10 @@ function bindEvents() {
   });
 
   els.tradeAction.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.tradeStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       submitOnchainTrade();
       return;
@@ -3086,6 +3159,10 @@ function bindEvents() {
   });
 
   els.lpAction.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.lpStatus.textContent = chainMismatchText();
+      return;
+    }
     updateLp();
     els.lpModalAmount.textContent = ethAmountText(lpCapitalEth());
     if (typeof els.lpDepositDialog.showModal === "function") {
@@ -3100,6 +3177,10 @@ function bindEvents() {
   });
 
   els.lpConfirmDeposit.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.lpStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       if (lpIsWithdrawMode()) submitOnchainLpWithdraw();
       else submitOnchainLpDeposit();
@@ -3125,6 +3206,10 @@ function bindEvents() {
   });
 
   els.lpClaimAction.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.lpStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       submitOnchainLpClaim();
       return;
@@ -3140,6 +3225,10 @@ function bindEvents() {
   els.deposit.addEventListener("input", updateTrader);
   els.solverFill.addEventListener("input", updateSolver);
   els.solverAction.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.solverStatus.textContent = chainMismatchText();
+      return;
+    }
     if (liveAuctionReady()) {
       submitOnchainSolverBid();
       return;
@@ -3156,6 +3245,10 @@ function bindEvents() {
     els.solverStatus.textContent = `Demo bid filled: ${ethAmountText(fill)} of ${auction.product} roll inventory.`;
   });
   els.keeperStartRoll.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.keeperStatus.textContent = chainMismatchText();
+      return;
+    }
     if (liveKeeperReady()) {
       submitOnchainKeeperStartRoll();
       return;
@@ -3171,6 +3264,10 @@ function bindEvents() {
     els.keeperStatus.textContent = `Demo roll started for ${wrapperConfig(state.activeAuction).product}.`;
   });
   els.keeperFinalizeRoll.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.keeperStatus.textContent = chainMismatchText();
+      return;
+    }
     if (liveKeeperReady()) {
       submitOnchainKeeperFinalize();
       return;
@@ -3185,6 +3282,10 @@ function bindEvents() {
     els.keeperStatus.textContent = "Demo roll finalized.";
   });
   els.keeperResetRoll.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.keeperStatus.textContent = chainMismatchText();
+      return;
+    }
     if (liveKeeperReady()) {
       submitOnchainKeeperReset();
       return;
@@ -3193,6 +3294,10 @@ function bindEvents() {
     els.keeperStatus.textContent = "Reset is only needed for expired partially filled live rolls.";
   });
   els.keeperCancelRoll.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.keeperStatus.textContent = chainMismatchText();
+      return;
+    }
     if (liveKeeperReady()) {
       submitOnchainKeeperCancel();
       return;
@@ -3208,6 +3313,10 @@ function bindEvents() {
     els.keeperStatus.textContent = "Demo roll cancelled.";
   });
   els.settlementSettle.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.settlementStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       submitOnchainSettlement();
       return;
@@ -3215,6 +3324,10 @@ function bindEvents() {
     els.settlementStatus.textContent = "Connect wallet to settle a deployed series.";
   });
   els.settlementMerge.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.settlementStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       submitOnchainMerge();
       return;
@@ -3222,6 +3335,10 @@ function bindEvents() {
     els.settlementStatus.textContent = "Connect wallet to merge matched P+N from a deployed series.";
   });
   els.settlementRedeem.addEventListener("click", () => {
+    if (walletChainMismatch()) {
+      els.settlementStatus.textContent = chainMismatchText();
+      return;
+    }
     if (onchainReady()) {
       submitOnchainRedeem();
       return;

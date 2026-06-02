@@ -32,6 +32,19 @@ const APP_REQUIREMENTS = [
     patterns: ["eth_requestAccounts", "eth_sendTransaction", "accountsChanged", "chainChanged"],
   },
   {
+    area: "wallet",
+    name: "manifest chain guard",
+    patterns: [
+      "normalizedChainId",
+      "manifestChainId",
+      "walletChainId",
+      "walletChainMatchesManifest",
+      "walletChainMismatch",
+      "chainMismatchText",
+      "if (walletChainMismatch()) throw new Error(chainMismatchText())",
+    ],
+  },
+  {
     area: "manifest",
     name: "deployed manifest loading",
     patterns: ["CONTRACT_MANIFEST_URL", "loadContractManifest", "hasDeployManifest", "onchainReady"],
