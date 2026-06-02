@@ -142,8 +142,8 @@ to unwind tracked ETH LP vault inventory with `sellInventory(...)`.
 
 ### `EthLPVaultKeeper`
 
-The keeper removes the need for a single operator to push safe LP strategy
-transactions:
+The keeper removes the need for a single privileged account to push safe LP
+strategy transactions:
 
 ```text
 deploy keeper
@@ -226,7 +226,7 @@ accept more assets before liquidity has recovered.
 
 ### `SeriesExposureVaultKeeper`
 
-The wrapper keeper removes the centralized roll operator from Steady ETH and
+The wrapper keeper removes centralized roll control from Steady ETH and
 Boosted ETH wrappers:
 
 ```text
@@ -318,7 +318,7 @@ auctionStatus(auctionId)
 
 The list updates on auction creation, full fill, and cancellation. This gives
 external solver bots a direct onchain discovery path instead of requiring a
-trusted UI manifest or offchain operator to tell them which auction ids exist.
+trusted UI manifest or private backend to tell them which auction ids exist.
 `auctionStatus` is the keeper-facing read model: it returns whether the auction
 is open, whether it is still active, whether the Dutch price has reached the
 floor, remaining inventory, raised buy-token amount, current price, elapsed
@@ -349,7 +349,7 @@ mintAndFillWithCallback / mintAndFillNWithCallback
 mintAndFillAllWithCallback / mintAndFillAllNWithCallback
 ```
 
-The operator helper uses the fill-all variants when its suggested solver bid is
+The runner helper uses the fill-all variants when its suggested solver bid is
 for the full visible remainder. That makes independent solver loops less brittle:
 if the auction size changes before execution, the solver is still protected by
 its max payment instead of relying only on a stale exact amount.
@@ -425,7 +425,7 @@ the vault is transparent enough for users to see TVL, PnL, open inventory, and r
 
 The UI consequence is important: traders should not see this machinery. Traders
 need buy/sell Steady and Boosted. LPs need deposit/withdraw and risk visibility.
-Solvers and keepers need the auction/operator surface.
+Solvers and keepers need the auction and runner surface.
 
 The most important Hyperliquid lesson is that the shared vault should look
 boring to depositors while doing specialized liquidity work in the background.
@@ -453,16 +453,16 @@ aggregator, or LP strategy can call.
 
 `ops/keeper-decisions.mjs` exposes the same idea operationally: it reads public
 state and emits ready actions plus structured transaction metadata. The optional
-`ops/keeper-runner.mjs` script can dry-run or execute a chosen operator role
+`ops/keeper-runner.mjs` script can dry-run or execute a chosen action scope
 (`solver`, `wrapper`, `lp`, or a specific action type). This gives the MVP a
-simple backend without adding a trusted backend: anyone can run the same loop,
-compete on fills, and audit the commands before execution.
+simple backend loop without adding a trusted backend: anyone can run the same
+loop, compete on fills, and audit the commands before execution.
 
 The helper also attaches the deterministic vault strategy plan to each live
 roll auction. ETH LP vault backstop actions are gated by that plan by default:
 the current roll must fit the low-cost band and be backed by managed ETH vault
 capital, or by explicit scale-mode Boosted/solver demand. This keeps the
-offchain operator path aligned with the product rule: pause, shrink, or require
+offchain runner path aligned with the product rule: pause, shrink, or require
 liquidity instead of forcing an expensive roll.
 
 `ops/solver-improvement-report.mjs` reads public `AuctionFilled` logs and
@@ -472,7 +472,7 @@ buy-token savings versus the vault's max-roll-price baseline. This is not a
 reward contract yet; it is the transparent accounting layer needed before a
 solver incentive program.
 
-For parallel operation, the runner supports role-scoped key environment
+For parallel execution, the runner supports action-scoped key environment
 variables. Solver, wrapper-maintenance, LP backstop, and inventory-unwind loops
 can run as separate processes with separate keys, avoiding a shared nonce stream
 while still reading the same public contract state.
@@ -551,11 +551,11 @@ matched P+N holders can merge back to ETH until settlement, even after maturity
 This is intentionally placed on the specialist Auctions page, not the normal
 Trade page. Ordinary users should usually trade or let wrappers roll before
 maturity; the maturity card is the decentralized cleanup path for residual
-direct token holders and keeper operators.
+direct token holders and keeper bots.
 
 ### `ProtocolHealthLens`
 
-`ProtocolHealthLens` is a read-only helper for decentralized operator
+`ProtocolHealthLens` is a read-only helper for decentralized protocol health
 dashboards. It has no authority and does not hold funds. It packages existing
 public state into structs:
 
@@ -646,7 +646,7 @@ Ethereum pilot deployer rejects caps above the pilot limit
 deployers reject nonzero auction guardians
 Ethereum pilot deployer wires the TWAP oracle, product wrappers, and wrapper-share AMMs
 Ethereum pilot deployer can bootstrap first product AMM liquidity
-deployers expose a read-only health lens for operator dashboards
+deployers expose a read-only health lens for protocol health dashboards
 health lens reads market, LP vault, wrapper, series, and auction status
 health lens reads auction circuit-breaker and wrapper keeper policy
 economic stress gate targets <= 10 bps weighted roll cost before raising capacity

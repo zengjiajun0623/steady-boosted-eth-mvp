@@ -171,7 +171,7 @@ ops/mvp-acceptance.mjs             full local/live acceptance gate
 ops/readiness-check.mjs            live manifest readiness gate
 ops/local-live-smoke.mjs           fresh Anvil trader/LP/solver/keeper proof
 ops/keeper-decisions.mjs           public-state keeper/solver suggestions
-ops/keeper-runner.mjs              optional role-scoped transaction runner
+ops/keeper-runner.mjs              optional action-scoped transaction runner
 ops/solver-improvement-report.mjs  public solver-vault fill attribution
 ops/vault-strategy-plan.mjs        deterministic LP vault action planner
 ops/capacity-policy.py             ETH-denominated launch cap gate
@@ -250,21 +250,22 @@ node ops/keeper-decisions.mjs \
   --rpc <RPC_URL>
 ```
 
-Role-scoped bots can then act after reviewing the dry-run output. These are not
-admin roles; they are ordinary transactions constrained by contract policy.
+Permissionless bots can then act after reviewing the dry-run output. These are
+not privileged roles; they are ordinary transactions constrained by contract
+policy.
 
 ```bash
-# Solver role: compete for roll auctions.
+# Solver bot: compete for roll auctions.
 node ops/keeper-runner.mjs \
   --rpc <RPC_URL> \
   --action solver \
   --recipient <ADDRESS> \
   --solver-model ops/solver-model-spread.mjs
 
-# Wrapper keeper role: start/finalize/reset/cancel validated wrapper rolls.
+# Wrapper keeper bot: start/finalize/reset/cancel validated wrapper rolls.
 node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper
 
-# ETH LP vault role: backstop rolls or clean up tracked inventory.
+# ETH LP vault bot: backstop rolls or clean up tracked inventory.
 node ops/keeper-runner.mjs \
   --rpc <RPC_URL> \
   --action lp \

@@ -2,7 +2,7 @@
 """Historical economic stress gate for Steady/Boosted roll liquidity.
 
 This is not a pricing oracle and not a promise of future returns. It packages
-the repo's existing historical RLP/N-side research into an operator check:
+the repo's existing historical RLP/N-side research into a public stress check:
 
 1. Can the ETH LP vault quote rolls below a target cost under the assumed
    capital and external N-demand mix?
@@ -118,7 +118,7 @@ def main() -> None:
     strategy = conservative_strategy(args.iv)
 
     scenario = RLPScenario(
-        name="operator-assumption",
+        name="runner-assumption",
         capital_ratio=args.rlp_capital_ratio,
         n_external_fill=args.n_external_fill,
         old_p_external_fill=args.old_p_external_fill,

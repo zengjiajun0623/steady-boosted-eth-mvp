@@ -117,7 +117,7 @@ export function actionRole(type) {
   if (type.startsWith("wrapper-")) return "wrapper";
   if (type === "lp-backstop-bid") return "lp";
   if (type.startsWith("lp-inventory-")) return "inventory";
-  return "operator";
+  return "default";
 }
 
 export function privateKeyEnvCandidates(action, runnerArgs) {
@@ -128,9 +128,9 @@ export function privateKeyEnvCandidates(action, runnerArgs) {
     wrapper: ["WRAPPER_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],
     lp: ["LP_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],
     inventory: ["INVENTORY_KEEPER_PRIVATE_KEY", "LP_KEEPER_PRIVATE_KEY", "PRIVATE_KEY"],
-    operator: ["PRIVATE_KEY"],
+    default: ["PRIVATE_KEY"],
   };
-  return byRole[actionRole(action.type)] || byRole.operator;
+  return byRole[actionRole(action.type)] || byRole.default;
 }
 
 export function privateKeyForAction(action, runnerArgs) {
@@ -192,7 +192,7 @@ function readyActions(decision, runnerArgs) {
 function assertExecutableConfig(runnerArgs, rpc) {
   if (!runnerArgs.execute) return;
   if (!runnerArgs.actions.length) {
-    throw new Error("--execute requires at least one --action so the operator role is explicit");
+    throw new Error("--execute requires at least one --action so the bot scope is explicit");
   }
   if (!rpc) {
     throw new Error("--execute requires --rpc or RPC_URL");

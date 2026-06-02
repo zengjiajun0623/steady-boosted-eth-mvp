@@ -10,7 +10,7 @@ import {EthLPVault} from "../vault/EthLPVault.sol";
 import {SeriesExposureVault} from "../vault/SeriesExposureVault.sol";
 import {SeriesExposureVaultKeeper} from "../vault/SeriesExposureVaultKeeper.sol";
 
-/// @notice Read-only helper for decentralized operator dashboards.
+/// @notice Read-only helper for decentralized protocol health dashboards.
 /// @dev This contract has no authority. It only packages existing public state
 /// into dashboard-friendly structs for keepers, solvers, and risk monitors.
 contract ProtocolHealthLens {

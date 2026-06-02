@@ -198,11 +198,11 @@ function buildSteps(args) {
   }
 
   if (args.skipStatic) {
-    steps.push(skipStep("static", "Demo/operator syntax checks", "Skipped by --skip-static."));
+    steps.push(skipStep("static", "Demo/runner syntax checks", "Skipped by --skip-static."));
   } else {
     for (const file of NODE_CHECKS) {
       steps.push({
-        area: file.startsWith("demo/") ? "demo" : "operators",
+        area: file.startsWith("demo/") ? "demo" : "runners",
         name: `node --check ${file}`,
         command: "node",
         args: ["--check", file],
@@ -293,7 +293,7 @@ function buildSteps(args) {
       ],
     });
     steps.push({
-      area: "operators",
+      area: "runners",
       name: "ETH LP vault strategy smoke",
       command: "node",
       args: [
@@ -315,7 +315,7 @@ function buildSteps(args) {
       ],
     });
     steps.push({
-      area: "operators",
+      area: "runners",
       name: "ETH LP vault rejects expensive roll smoke",
       command: "node",
       expectFailure: true,

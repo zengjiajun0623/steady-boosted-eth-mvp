@@ -320,7 +320,7 @@ Steady and Boosted rolls by their old-token/new-token pair. Solver bots can
 also watch known wrapper sellers directly with `activeAuctionCountBySeller(...)`
 and `activeAuctionIdBySellerAt(...)`.
 
-Independent keepers and solvers can use the dependency-free operator helper:
+Independent keepers and solvers can use the dependency-free runner helper:
 
 ```bash
 node ops/keeper-decisions.mjs --manifest demo/contract-manifest.json --rpc <RPC_URL>
@@ -359,7 +359,7 @@ single auction context as JSON on stdin and returns a JSON object like:
 }
 ```
 
-The operator `--max-price-wad` remains a hard cap even when a model asks for a
+The runner `--max-price-wad` remains a hard cap even when a model asks for a
 higher price. The included `ops/solver-model-spread.mjs` is a simple reference
 model that treats a 1:1 roll as fair, waits for `SOLVER_EDGE_BPS` of edge, and
 optionally caps size with `SOLVER_MAX_FILL_ETH`. Use `--max-inventory-sell-eth`
@@ -372,7 +372,7 @@ seller's active-auction ceiling. LP backstop actions are also marked not ready i
 the auction is too close to expiry, too far down the Dutch curve, above the LP
 max roll price, inside the solver-first delay window, or above the LP vault's
 remaining strategy capacity. It does not send transactions by itself; it is an
-open decision layer that any operator can run and audit.
+open decision layer that anyone can run and audit.
 
 The helper also runs `ops/vault-strategy-plan.mjs` for each live roll auction.
 By default, the LP backstop suggestion is blocked if the strategy plan fails:
@@ -426,7 +426,7 @@ default gate warns if the LP vault has less than `0.1 ETH` managed because
 trader markets can be live while the roll backstop is still unfunded.
 
 For a broader pre-launch check that includes the local contract suite, demo and
-operator syntax, Maker-style auction/reset paths, and historical capacity
+runner syntax, Maker-style auction/reset paths, and historical capacity
 assumptions, run:
 
 ```bash
@@ -473,8 +473,8 @@ node ops/readiness-check.mjs \
 The readiness capacity section uses visible Boosted AMM ETH plus the explicit
 Boosted/solver commitments above. It compares that against the Steady wrapper
 roll cap, Boosted wrapper roll cap, and factory series cap using the same
-historical N-demand ratios documented below. This is still an operator gate,
-not an onchain market-demand oracle.
+historical N-demand ratios documented below. This is still a public readiness
+gate, not an onchain market-demand oracle.
 
 For a small no-solver launch, pass `--no-solver-launch` and size the product by
 LP-vault capital alone. This is the Hyperliquid-style bootstrap path: the ETH LP
@@ -563,7 +563,7 @@ the threshold are rejected unless they clear the full current remainder, and
 fills cannot leave a nonzero remainder below the threshold. This keeps onchain
 auction discovery usable for independent solvers without an admin.
 
-To run an actual decentralized operator backend, use the companion runner. It
+To run actual decentralized automation, use the companion runner. It
 recomputes decisions from public state each pass, filters for ready actions with
 structured transaction metadata, and defaults to dry-run:
 
@@ -574,9 +574,9 @@ node ops/keeper-runner.mjs \
   --action wrapper
 ```
 
-Execution mode requires `--execute`, at least one explicit `--action` role, and
-a key env var for that role. Use separate keys for parallel operators so solver,
-wrapper, and LP loops do not share nonce state:
+Execution mode requires `--execute`, at least one explicit `--action`, and a
+key env var for that action scope. Use separate keys for parallel bots so
+solver, wrapper, and LP loops do not share nonce state:
 
 ```text
 solver actions: SOLVER_PRIVATE_KEY, fallback PRIVATE_KEY

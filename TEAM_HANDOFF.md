@@ -134,7 +134,7 @@ ops/mvp-acceptance.mjs          full local acceptance gate
 ops/readiness-check.mjs         live manifest readiness gate
 ops/mainnet-oracle-preflight.mjs
                                 mainnet oracle pool-fact preflight
-ops/keeper-decisions.mjs        public-state operator suggestions
+ops/keeper-decisions.mjs        public-state runner suggestions
 ops/keeper-runner.mjs           optional execution runner
 ops/solver-improvement-report.mjs
                                 public event-log attribution for solver fills

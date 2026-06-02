@@ -8,7 +8,7 @@ expensive. At larger scale that means LP-vault capital plus Boosted/N-side
 demand. For a small no-solver launch, the LP vault can be the explicit protocol
 liquidity engine as long as capacity stays inside a conservative capital ratio.
 
-This script turns that bottleneck into an operator gate:
+This script turns that bottleneck into a public capacity gate:
 
     normal mode: safe Steady cap = min(LP-vault capital cap, Boosted/N demand cap)
     no-solver mode: safe Steady cap = LP-vault capital cap
