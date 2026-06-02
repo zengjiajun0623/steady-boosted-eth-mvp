@@ -168,6 +168,8 @@ audit_scope.md                  external audit scope and invariant checklist
 oracle_settlement.md            settlement oracle notes
 decentralized_mvp.md            trust-minimized product design
 solver_market.md                solver onboarding and attribution guide
+evidence/audit-report.example.json
+                                structured external audit evidence shape
 evidence/security-intake.example.json
                                 structured vulnerability intake evidence shape
 evidence/solver-commitments.example.json
@@ -204,8 +206,9 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
    Production launch approval should use `ops/production-readiness.mjs`. It is
    stricter than MVP acceptance and should fail until full local acceptance,
-   audit evidence, incident response, solver/liquidity commitments, mainnet
-   oracle preflight, and strict live readiness all pass.
+   structured audit evidence, incident response, security intake,
+   solver/liquidity commitments, mainnet oracle preflight, and strict live
+   readiness all pass.
 
 2. Vault strategy
 

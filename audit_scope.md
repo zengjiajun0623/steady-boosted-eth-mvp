@@ -66,7 +66,7 @@ node ops/no-admin-surface-check.mjs
 node ops/production-readiness.mjs \
   --manifest manifests/production.json \
   --rpc $MAINNET_RPC_URL \
-  --audit-report evidence/audit-final.md \
+  --audit-report evidence/audit-final.json \
   --incident-runbook ops/incident-runbook.md \
   --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
@@ -77,7 +77,7 @@ node ops/production-readiness.mjs \
 ## Known Launch Blockers
 
 ```text
-External audit evidence must be final.
+External audit evidence must be final, structured, scoped to this file, remediated, and retested.
 Production manifest must pass strict live mainnet readiness.
 Solver/liquidity commitments must be structured, signed or funded, unexpired, and large enough to cover the CLI capacity amounts.
 Incident response ownership and user communications must be assigned before real funds.

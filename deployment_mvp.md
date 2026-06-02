@@ -228,7 +228,7 @@ After a successful pilot deploy, run production launch approval separately:
 node ops/production-readiness.mjs \
   --manifest manifests/ethereum-pilot.json \
   --rpc $MAINNET_RPC_URL \
-  --audit-report evidence/audit-final.md \
+  --audit-report evidence/audit-final.json \
   --incident-runbook ops/incident-runbook.md \
   --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
@@ -236,6 +236,10 @@ node ops/production-readiness.mjs \
   --solver-float-eth 250
 ```
 
+Use `evidence/audit-report.example.json` as the shape for the final external
+audit evidence file. The production gate rejects missing scope, missing
+production contracts, missing remediation/retest evidence, and unresolved
+critical or high findings.
 Use `evidence/security-intake.example.json` as the shape for the final
 vulnerability intake file. The production gate rejects inactive programs,
 missing contacts, missing scope, loose triage SLAs, and placeholder evidence.

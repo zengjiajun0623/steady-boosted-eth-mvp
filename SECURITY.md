@@ -21,7 +21,7 @@ Before any real-fund launch, the production gate must pass:
 node ops/production-readiness.mjs \
   --manifest manifests/production.json \
   --rpc $MAINNET_RPC_URL \
-  --audit-report evidence/audit-final.md \
+  --audit-report evidence/audit-final.json \
   --incident-runbook ops/incident-runbook.md \
   --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
@@ -34,6 +34,9 @@ the local product works; the production gate re-runs that acceptance suite and
 also requires external safety evidence and a live mainnet-ready deployment
 manifest. Evidence files must be real final artifacts, not placeholders,
 examples, TODO notes, or draft-only documents.
+Audit evidence must be structured JSON with final scope, production contracts
+reviewed, remediation and retest evidence, and zero unresolved critical or high
+findings.
 Vulnerability intake evidence must be active structured JSON with an intake
 route, two contacts, product scope, triage SLAs, and a live bounty or equivalent
 policy.

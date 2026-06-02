@@ -390,7 +390,7 @@ Production launch approval should use the separate production gate:
 node ops/production-readiness.mjs \
   --manifest manifests/production.json \
   --rpc $MAINNET_RPC_URL \
-  --audit-report evidence/audit-final.md \
+  --audit-report evidence/audit-final.json \
   --incident-runbook ops/incident-runbook.md \
   --security-intake evidence/security-intake-final.json \
   --solver-commitments evidence/solver-commitments-final.json \
@@ -404,6 +404,10 @@ incident response runbook, active vulnerability intake, solver/liquidity
 commitments, mainnet oracle preflight, and strict live readiness all pass.
 The evidence files must be real final artifacts; the gate rejects empty files
 and obvious placeholder, example, TODO, or draft language.
+Audit evidence must be structured JSON matching
+`evidence/audit-report.example.json`, with completed scope, production contracts
+reviewed, remediation/retest evidence, and no unresolved critical or high
+findings.
 Security intake evidence must be structured JSON matching
 `evidence/security-intake.example.json`, with an active intake route, named
 contacts, scope coverage, triage SLAs, and a live bounty or equivalent policy.

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "status": "complete",
+  "auditor": "External Audit Firm",
+  "completedAt": "2026-06-02T00:00:00Z",
+  "reportUrl": "https://security.example.com/steady-boosted-eth/audit-report",
+  "scope": [
+    "smart-contracts",
+    "frontend-wallet",
+    "deployment-ops",
+    "oracle-settlement",
+    "solver-auctions",
+    "lp-vault"
+  ],
+  "contractsReviewed": [
+    "EthOptionsFactory",
+    "EthLPVault",
+    "EthLPVaultKeeper",
+    "EthTokenAMM",
+    "EthereumMainnetOracleConfig",
+    "EthereumPilotTopology",
+    "MedianStableTwapSettlementOracle",
+    "MintBurnToken",
+    "ProtocolHealthLens",
+    "RollAuction",
+    "RollSolver",
+    "SeriesExposureVault",
+    "SeriesExposureVaultKeeper",
+    "UniswapV3TwapSettlementOracle"
+  ],
+  "findings": {
+    "critical": { "total": 0, "unresolved": 0 },
+    "high": { "total": 1, "unresolved": 0 },
+    "medium": { "total": 2, "unresolved": 0 },
+    "low": { "total": 3, "unresolved": 1 }
+  },
+  "remediation": {
+    "completed": true,
+    "evidence": "https://security.example.com/steady-boosted-eth/remediation"
+  },
+  "retest": {
+    "completed": true,
+    "evidence": "https://security.example.com/steady-boosted-eth/retest"
+  },
+  "riskAcceptance": {
+    "approved": true,
+    "evidence": "https://security.example.com/steady-boosted-eth/risk-acceptance"
+  }
+}

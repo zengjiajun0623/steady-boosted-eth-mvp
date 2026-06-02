@@ -13,7 +13,7 @@ function usage() {
   node ops/production-readiness.mjs --manifest <path> --rpc <MAINNET_RPC_URL> [options]
 
 Required production evidence:
-  --audit-report <path>          Final external audit report or audit evidence file
+  --audit-report <path>          Structured final external audit evidence JSON
   --incident-runbook <path>      Incident response and emergency communications runbook
   --security-intake <path>       Structured vulnerability intake / bug bounty JSON evidence
   --solver-commitments <path>    Structured solver/liquidity commitment JSON evidence
@@ -41,7 +41,7 @@ Example:
   node ops/production-readiness.mjs \\
     --manifest manifests/production.json \\
     --rpc $MAINNET_RPC_URL \\
-    --audit-report evidence/audit-final.md \\
+    --audit-report evidence/audit-final.json \\
     --incident-runbook ops/incident-runbook.md \\
     --security-intake evidence/security-intake-final.json \\
     --solver-commitments evidence/solver-commitments-final.json \\
@@ -258,6 +258,118 @@ function checkEvidenceFile(checks, area, name, file, detail) {
   if (!evidence) return;
   const { size } = evidence;
   pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
+}
+
+const REQUIRED_AUDIT_SCOPE = [
+  "smart-contracts",
+  "frontend-wallet",
+  "deployment-ops",
+  "oracle-settlement",
+  "solver-auctions",
+  "lp-vault",
+];
+
+const REQUIRED_AUDIT_CONTRACTS = [
+  "EthOptionsFactory",
+  "EthLPVault",
+  "EthLPVaultKeeper",
+  "EthTokenAMM",
+  "EthereumMainnetOracleConfig",
+  "EthereumPilotTopology",
+  "MedianStableTwapSettlementOracle",
+  "MintBurnToken",
+  "ProtocolHealthLens",
+  "RollAuction",
+  "RollSolver",
+  "SeriesExposureVault",
+  "SeriesExposureVaultKeeper",
+  "UniswapV3TwapSettlementOracle",
+];
+
+function checkAuditEvidence(checks, file) {
+  const evidence = validateEvidenceFile(
+    checks,
+    "security",
+    "external audit evidence",
+    file,
+    "Production requires structured final external audit evidence.",
+  );
+  if (!evidence) return;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(evidence.text);
+  } catch (error) {
+    fail(checks, "security", "external audit evidence", `Audit evidence must be JSON: ${error.message}.`, { file });
+    return;
+  }
+
+  const failures = [];
+  const scope = Array.isArray(parsed?.scope) ? parsed.scope.map((item) => String(item)) : [];
+  const contractsReviewed = Array.isArray(parsed?.contractsReviewed)
+    ? parsed.contractsReviewed.map((item) => String(item))
+    : [];
+  const completedAtMs = Date.parse(String(parsed?.completedAt || ""));
+  const findings = parsed?.findings || {};
+  const remediation = parsed?.remediation || {};
+  const retest = parsed?.retest || {};
+  const riskAcceptance = parsed?.riskAcceptance || {};
+  const reportRef = String(parsed?.reportUrl || parsed?.reportHash || "").trim();
+
+  if (parsed?.version !== 1) failures.push("version must be 1");
+  if (parsed?.status !== "complete") failures.push("status must be complete");
+  if (!String(parsed?.auditor || "").trim()) failures.push("auditor is missing");
+  if (!Number.isFinite(completedAtMs) || completedAtMs > Date.now()) {
+    failures.push("completedAt must be an ISO timestamp in the past");
+  }
+  if (reportRef.length < 12) failures.push("reportUrl or reportHash needs a concrete reference");
+  for (const requiredScope of REQUIRED_AUDIT_SCOPE) {
+    if (!scope.includes(requiredScope)) failures.push(`scope must include ${requiredScope}`);
+  }
+  for (const contractName of REQUIRED_AUDIT_CONTRACTS) {
+    if (!contractsReviewed.includes(contractName)) failures.push(`contractsReviewed must include ${contractName}`);
+  }
+
+  const count = (severity, key) => Number(findings?.[severity]?.[key]);
+  for (const severity of ["critical", "high", "medium", "low"]) {
+    for (const key of ["total", "unresolved"]) {
+      const value = count(severity, key);
+      if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+        failures.push(`findings.${severity}.${key} must be a non-negative integer`);
+      }
+    }
+  }
+  if (count("critical", "unresolved") > 0) failures.push("critical findings must have zero unresolved issues");
+  if (count("high", "unresolved") > 0) failures.push("high findings must have zero unresolved issues");
+  if (count("medium", "unresolved") > 0) {
+    if (riskAcceptance.approved !== true || String(riskAcceptance.evidence || "").trim().length < 12) {
+      failures.push("unresolved medium findings require approved riskAcceptance evidence");
+    }
+  }
+  if (remediation.completed !== true) failures.push("remediation.completed must be true");
+  if (String(remediation.evidence || "").trim().length < 12) {
+    failures.push("remediation.evidence needs a concrete reference");
+  }
+  if (retest.completed !== true) failures.push("retest.completed must be true");
+  if (String(retest.evidence || "").trim().length < 12) failures.push("retest.evidence needs a concrete reference");
+
+  if (failures.length) {
+    fail(checks, "security", "external audit evidence", failures.join("; "), { file });
+    return;
+  }
+
+  pass(
+    checks,
+    "security",
+    "external audit evidence",
+    `Audit complete by ${parsed.auditor}; reviewed ${contractsReviewed.length} contracts with zero unresolved critical/high findings.`,
+    {
+      file,
+      auditor: parsed.auditor,
+      scope,
+      contractsReviewed: contractsReviewed.length,
+    },
+  );
 }
 
 function checkSecurityIntake(checks, file) {
@@ -602,13 +714,7 @@ function main() {
   const checks = [];
 
   checkSecurityStatus(checks);
-  checkEvidenceFile(
-    checks,
-    "security",
-    "external audit evidence",
-    args.auditReport,
-    "Production requires final external audit evidence.",
-  );
+  checkAuditEvidence(checks, args.auditReport);
   checkEvidenceFile(
     checks,
     "operations",
