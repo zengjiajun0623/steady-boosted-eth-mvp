@@ -132,6 +132,8 @@ demo/index.html                 demo surface
 demo/app.js                     demo interactions and simulated/live mode
 ops/mvp-acceptance.mjs          full local acceptance gate
 ops/readiness-check.mjs         live manifest readiness gate
+ops/mainnet-oracle-preflight.mjs
+                                mainnet oracle pool-fact preflight
 ops/keeper-decisions.mjs        public-state operator suggestions
 ops/keeper-runner.mjs           optional execution runner
 ops/solver-improvement-report.mjs
@@ -147,7 +149,8 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 
    Prove the `--rpc` readiness path against a real deployed manifest, including
    oracle metadata, compatible first/second series metadata, pinned sellers,
-   keeper policies, auction limits, and capacity checks.
+   keeper policies, auction limits, and capacity checks. Before deploy, run the
+   mainnet oracle preflight against the intended Ethereum RPC.
 
 2. Vault strategy
 

@@ -16,6 +16,7 @@ const NODE_CHECKS = [
   "ops/frontend-live-surface-check.mjs",
   "ops/keeper-decisions.mjs",
   "ops/keeper-runner.mjs",
+  "ops/mainnet-oracle-preflight.mjs",
   "ops/mvp-acceptance.mjs",
   "ops/readiness-check.mjs",
   "ops/solver-model-spread.mjs",

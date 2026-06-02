@@ -175,6 +175,7 @@ DeployLocalMvpManifest: broadcast-friendly local component deployer plus topolog
 DeployEthereumPilot: guarded Ethereum mainnet pilot deployment topology with optional P/N inventory markets
 ops/deploy-local-demo.mjs: one-command Anvil deploy, manifest export, and AMM seeding helper
 ops/frontend-live-surface-check.mjs: static acceptance check for wallet-connected trader, LP, solver, keeper, and settlement actions, including calldata selector drift checks
+ops/mainnet-oracle-preflight.mjs: read-only Ethereum mainnet pool-fact check for the guarded USDC/USDT/DAI median oracle config
 ops/local-live-smoke.mjs: fresh-Anvil deploy/trader/LP/solver smoke test, including optional negative readiness probes
 ops/mvp-acceptance.mjs: local/live acceptance gate for trader, LP, solver, and decentralized-liveness requirements
 ops/solver-model-spread.mjs: reference external solver model for price-edge and fill-size decisions

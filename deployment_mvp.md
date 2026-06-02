@@ -726,31 +726,15 @@ default TWAP window: 72 hours
 initial pilot cap: 50 ETH per series
 ```
 
-These pool facts were verified on Ethereum mainnet with:
+Verify these pool facts against a mainnet RPC before deploying:
 
 ```bash
-cast call --rpc-url <mainnet-rpc> 0x1F98431c8aD98523631AE4a59f267346ea31F984 \
-  'getPool(address,address,uint24)(address)' \
-  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 \
-  0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
-  500
-
-cast call --rpc-url <mainnet-rpc> 0x1F98431c8aD98523631AE4a59f267346ea31F984 \
-  'getPool(address,address,uint24)(address)' \
-  0xdAC17F958D2ee523a2206206994597C13D831ec7 \
-  0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
-  500
-
-cast call --rpc-url <mainnet-rpc> 0x1F98431c8aD98523631AE4a59f267346ea31F984 \
-  'getPool(address,address,uint24)(address)' \
-  0x6B175474E89094C44Da98b954EedeAC495271d0F \
-  0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
-  500
-
-cast call --rpc-url <mainnet-rpc> 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640 'token0()(address)'
-cast call --rpc-url <mainnet-rpc> 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640 'token1()(address)'
-cast call --rpc-url <mainnet-rpc> 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640 'fee()(uint24)'
+node ops/mainnet-oracle-preflight.mjs --rpc <mainnet-rpc>
 ```
+
+The preflight checks Ethereum mainnet chain id, `UniswapV3Factory.getPool` for
+USDC/WETH, USDT/WETH, and DAI/WETH 0.05% pools, each pool's token order, each
+pool's fee, and that the three median source pools are distinct.
 
 Before real value, keep caps small and independently review the tick-price math,
 pool-liquidity assumptions, and cap policy against current market depth.
