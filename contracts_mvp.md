@@ -462,6 +462,13 @@ state and emits ready actions plus structured transaction metadata. The optional
 simple backend without adding a trusted backend: anyone can run the same loop,
 compete on fills, and audit the commands before execution.
 
+The helper also attaches the deterministic vault strategy plan to each live
+roll auction. ETH LP vault backstop actions are gated by that plan by default:
+the current roll must fit the low-cost band and be backed by managed ETH vault
+capital, or by explicit scale-mode Boosted/solver demand. This keeps the
+offchain operator path aligned with the product rule: pause, shrink, or require
+liquidity instead of forcing an expensive roll.
+
 For parallel operation, the runner supports role-scoped key environment
 variables. Solver, wrapper-maintenance, LP backstop, and inventory-unwind loops
 can run as separate processes with separate keys, avoiding a shared nonce stream

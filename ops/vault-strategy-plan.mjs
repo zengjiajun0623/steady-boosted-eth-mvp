@@ -1,7 +1,32 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from "node:url";
+
 const DEFAULT_AVG_N_DEMAND_BPS = 21_152;
 const DEFAULT_STRESS_N_DEMAND_BPS = 160_364;
+
+export const DEFAULT_STRATEGY_ARGS = Object.freeze({
+  targetSteadyCapEth: null,
+  targetRollEth: null,
+  lpVaultEth: 0,
+  solverFillEth: 0,
+  boostedDemandEth: 0,
+  solverFloatEth: 0,
+  observedRollCostBps: null,
+  maxNormalRollBps: 10,
+  rlpCapitalRatio: 10,
+  nExternalFillBps: 9_500,
+  avgNDemandBps: DEFAULT_AVG_N_DEMAND_BPS,
+  stressNDemandBps: DEFAULT_STRESS_N_DEMAND_BPS,
+  noSolverLaunch: false,
+  expectAction: "",
+  strict: false,
+  json: false,
+});
+
+function defaultArgs() {
+  return { ...DEFAULT_STRATEGY_ARGS };
+}
 
 function usage() {
   return `Usage:
@@ -44,24 +69,7 @@ Examples:
 }
 
 function parseArgs(argv) {
-  const args = {
-    targetSteadyCapEth: null,
-    targetRollEth: null,
-    lpVaultEth: 0,
-    solverFillEth: 0,
-    boostedDemandEth: 0,
-    solverFloatEth: 0,
-    observedRollCostBps: null,
-    maxNormalRollBps: 10,
-    rlpCapitalRatio: 10,
-    nExternalFillBps: 9_500,
-    avgNDemandBps: DEFAULT_AVG_N_DEMAND_BPS,
-    stressNDemandBps: DEFAULT_STRESS_N_DEMAND_BPS,
-    noSolverLaunch: false,
-    expectAction: "",
-    strict: false,
-    json: false,
-  };
+  const args = defaultArgs();
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -110,6 +118,12 @@ function parseArgs(argv) {
       throw new Error(`Unknown option: ${arg}`);
     }
   }
+
+  return normalizePlanArgs(args);
+}
+
+export function normalizePlanArgs(input) {
+  const args = { ...DEFAULT_STRATEGY_ARGS, ...input };
 
   if (args.targetSteadyCapEth === null && args.targetRollEth === null) {
     throw new Error("Pass --target-steady-cap-eth or --target-roll-eth.");
@@ -166,7 +180,8 @@ function statusFor(checks) {
   return { status, counts };
 }
 
-function buildPlan(args) {
+export function buildPlan(input) {
+  const args = normalizePlanArgs(input);
   const checks = [];
   const externalDemandEth = args.boostedDemandEth + args.solverFloatEth;
   const lpRollCapEth = args.lpVaultEth / args.rlpCapitalRatio;
@@ -354,7 +369,9 @@ async function main() {
   if (plan.status === "fail" || (args.strict && plan.counts.warn > 0)) process.exit(1);
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}

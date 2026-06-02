@@ -376,6 +376,15 @@ max roll price, inside the solver-first delay window, or above the LP vault's
 remaining strategy capacity. It does not send transactions by itself; it is an
 open decision layer that any operator can run and audit.
 
+The helper also runs `ops/vault-strategy-plan.mjs` for each live roll auction.
+By default, the LP backstop suggestion is blocked if the strategy plan fails:
+the current roll must remain inside the normal roll-cost band and be supported
+by managed ETH LP vault capital. For a deliberately small bootstrap, pass
+`--strategy-no-solver-launch`; for scale mode, pass committed
+`--strategy-boosted-demand-eth` and `--strategy-solver-float-eth`. Use
+`--no-strategy-gate` only for inspection or emergency debugging, not normal
+operation.
+
 When a solver action is sized to the full current auction remainder, the helper
 emits the `RollSolver` fill-all variant instead of a fixed-size fill. This keeps
 the solver protected by `maxBuyAmount` while avoiding needless stale-size reverts

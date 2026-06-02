@@ -449,6 +449,7 @@ async function runLiveSmoke(args) {
         args.noSolverLaunch ? "1.0" : "0.6",
         "--max-price-wad",
         "1000000000000000000",
+        "--strategy-no-solver-launch",
       ],
     });
     record(args.noSolverLaunch ? "ETH LP vault cleared the roll" : "ETH LP vault backstopped the remaining roll", {

@@ -42,6 +42,10 @@ Decision options are passed to keeper-decisions.mjs, for example:
   --inventory-slippage-bps <bps>
   --solver-model <path>
   --recipient <address>
+  --strategy-no-solver-launch
+  --strategy-boosted-demand-eth <eth>
+  --strategy-solver-float-eth <eth>
+  --no-strategy-gate
 
 Examples:
   node ops/keeper-runner.mjs --rpc http://127.0.0.1:8545 --action wrapper

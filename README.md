@@ -193,6 +193,13 @@ wrapper seller quota is full. The companion runner turns those public-state
 decisions into a dry-run or
 operator-selected execution loop:
 
+For roll auctions, `keeper-decisions` also attaches a vault strategy plan and
+blocks LP backstop suggestions by default when the current roll would breach
+the low-cost band or lacks enough managed ETH vault capital. Pass
+`--strategy-no-solver-launch` for a deliberately small bootstrap, or pass
+committed `--strategy-boosted-demand-eth` and `--strategy-solver-float-eth` for
+scale mode.
+
 ```bash
 # Solver role: compete for roll auctions.
 node ops/keeper-runner.mjs \
@@ -205,7 +212,10 @@ node ops/keeper-runner.mjs \
 node ops/keeper-runner.mjs --rpc <RPC_URL> --action wrapper
 
 # ETH LP vault role: backstop rolls or clean up tracked inventory.
-node ops/keeper-runner.mjs --rpc <RPC_URL> --action lp
+node ops/keeper-runner.mjs \
+  --rpc <RPC_URL> \
+  --action lp \
+  --strategy-no-solver-launch
 ```
 
 Add `--execute` only after reviewing the dry-run output and setting the key for

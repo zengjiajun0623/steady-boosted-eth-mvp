@@ -3,6 +3,7 @@
 import fs from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { buildPlan } from "./vault-strategy-plan.mjs";
 
 const DEFAULT_MANIFEST = path.join("demo", "contract-manifest.json");
 const WAD = 10n ** 18n;
@@ -30,6 +31,7 @@ const SELECTORS = {
   healthAuction: "0x71ea82c9",
   inventorySeries: "0x8788f42b",
   inventorySeriesLength: "0x99b97012",
+  managedAssets: "0xf4a0877f",
   maxActiveStrategyEth: "0x7442e57e",
   maxAuctionPriceDropBps: "0x1e51dda4",
   maxEthPerRoll: "0x7bcde30b",
@@ -85,6 +87,17 @@ Options:
   --duration <seconds>       Wrapper roll duration (default: 86400)
   --recipient <address>      Recipient placeholder for solver commands (default: $RECIPIENT)
   --solver-model <path>      Optional executable/JS model for solver bid decisions
+  --strategy-max-normal-roll-bps <bps>
+                              Strategy roll-cost ceiling (default: 10)
+  --strategy-rlp-capital-ratio <n>
+                              Required LP vault ETH / product cap (default: 10)
+  --strategy-boosted-demand-eth <eth>
+                              Committed Boosted/N-side demand for strategy gate
+  --strategy-solver-float-eth <eth>
+                              External solver balance sheet for strategy gate
+  --strategy-no-solver-launch
+                              Gate a small launch by LP-vault capital alone
+  --no-strategy-gate          Show strategy plan but do not block LP backstop actions
 
 Examples:
   node ops/keeper-decisions.mjs --rpc http://127.0.0.1:8545
@@ -106,6 +119,12 @@ function parseArgs(argv) {
     duration: 86_400n,
     recipient: "$RECIPIENT",
     solverModel: null,
+    strategyMaxNormalRollBps: 10,
+    strategyRlpCapitalRatio: 10,
+    strategyBoostedDemandWei: 0n,
+    strategySolverFloatWei: 0n,
+    strategyNoSolverLaunch: false,
+    strategyGate: true,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -146,6 +165,18 @@ function parseArgs(argv) {
       args.recipient = next();
     } else if (arg === "--solver-model") {
       args.solverModel = next();
+    } else if (arg === "--strategy-max-normal-roll-bps") {
+      args.strategyMaxNormalRollBps = parseNonNegativeNumber(next(), arg);
+    } else if (arg === "--strategy-rlp-capital-ratio") {
+      args.strategyRlpCapitalRatio = parsePositiveNumber(next(), arg);
+    } else if (arg === "--strategy-boosted-demand-eth") {
+      args.strategyBoostedDemandWei = ethToWei(next());
+    } else if (arg === "--strategy-solver-float-eth") {
+      args.strategySolverFloatWei = ethToWei(next());
+    } else if (arg === "--strategy-no-solver-launch") {
+      args.strategyNoSolverLaunch = true;
+    } else if (arg === "--no-strategy-gate") {
+      args.strategyGate = false;
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -221,6 +252,24 @@ function ethToWei(value) {
   return BigInt(whole || "0") * WAD + BigInt(padded);
 }
 
+function parseNonNegativeNumber(value, name) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${name} must be a non-negative number`);
+  return parsed;
+}
+
+function parsePositiveNumber(value, name) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${name} must be a positive number`);
+  return parsed;
+}
+
+function weiToEthNumber(value) {
+  const whole = Number(value / WAD);
+  const fraction = Number(value % WAD) / Number(WAD);
+  return whole + fraction;
+}
+
 function weiToEthText(value) {
   const sign = value < 0n ? "-" : "";
   const raw = value < 0n ? -value : value;
@@ -230,8 +279,28 @@ function weiToEthText(value) {
   return `${sign}${whole.toString()}${fractionText ? `.${fractionText}` : ""} ETH`;
 }
 
+function rollCostBpsFromPrice(priceWad) {
+  if (priceWad >= WAD) return 0;
+  return Number(((WAD - priceWad) * 10_000n) / WAD);
+}
+
 function mulDivUp(x, y, denominator) {
   return (x * y + denominator - 1n) / denominator;
+}
+
+function buildAuctionStrategyPlan(wrapper, auction, args, lpPolicy, solverReady, solverSellAmount) {
+  return buildPlan({
+    targetSteadyCapEth: weiToEthNumber(auction.remainingSellAmount),
+    targetRollEth: weiToEthNumber(auction.remainingSellAmount),
+    lpVaultEth: lpPolicy ? weiToEthNumber(lpPolicy.managedAssets) : 0,
+    solverFillEth: solverReady ? weiToEthNumber(solverSellAmount) : 0,
+    boostedDemandEth: weiToEthNumber(args.strategyBoostedDemandWei),
+    solverFloatEth: weiToEthNumber(args.strategySolverFloatWei),
+    observedRollCostBps: rollCostBpsFromPrice(auction.currentPriceWad),
+    maxNormalRollBps: args.strategyMaxNormalRollBps,
+    rlpCapitalRatio: args.strategyRlpCapitalRatio,
+    noSolverLaunch: args.strategyNoSolverLaunch,
+  });
 }
 
 function priceDropBps(startPriceWad, currentPriceWad) {
@@ -384,6 +453,7 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     maxEthPerRollRaw,
     maxActiveStrategyEthRaw,
     activeStrategyEthRaw,
+    managedAssetsRaw,
     minBackstopDelayRaw,
     minAuctionTimeLeftRaw,
     maxAuctionPriceDropRaw,
@@ -393,6 +463,7 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     ethCall(rpcUrl, lpVault, SELECTORS.maxEthPerRoll),
     ethCall(rpcUrl, lpVault, SELECTORS.maxActiveStrategyEth),
     ethCall(rpcUrl, lpVault, SELECTORS.activeStrategyEth),
+    ethCall(rpcUrl, lpVault, SELECTORS.managedAssets),
     ethCall(rpcUrl, lpVault, SELECTORS.minBackstopDelay),
     ethCall(rpcUrl, lpVault, SELECTORS.minAuctionTimeLeft),
     ethCall(rpcUrl, lpVault, SELECTORS.maxAuctionPriceDropBps),
@@ -404,6 +475,7 @@ async function readLpVaultPolicy(rpcUrl, lpVault) {
     maxEthPerRoll: decodeUint(maxEthPerRollRaw),
     maxActiveStrategyEth: decodeUint(maxActiveStrategyEthRaw),
     activeStrategyEth: decodeUint(activeStrategyEthRaw),
+    managedAssets: decodeUint(managedAssetsRaw),
     minBackstopDelay: decodeUint(minBackstopDelayRaw),
     minAuctionTimeLeft: decodeUint(minAuctionTimeLeftRaw),
     maxAuctionPriceDropBps: decodeUint(maxAuctionPriceDropRaw),
@@ -871,9 +943,25 @@ function buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedL
     const lpDelayOk = !lpPolicy || auction.elapsed >= lpPolicy.minBackstopDelay;
     const lpTimeOk = !lpPolicy || auction.timeLeft >= lpPolicy.minAuctionTimeLeft;
     const lpDropOk = !lpPolicy || lpPriceDropBps <= lpPolicy.maxAuctionPriceDropBps;
-    const lpReady = lpCurrentPriceOk && !fillsPaused && !lpDustBlocked && lpPriceOk && lpCapacityOk && lpDelayOk && lpTimeOk && lpDropOk;
+    const strategyPlan = buildAuctionStrategyPlan(wrapper, auction, args, lpPolicy, solverReady, solverSellAmount);
+    const strategyBlocksLp = args.strategyGate && strategyPlan.status === "fail";
+    const lpReady =
+      lpCurrentPriceOk && !fillsPaused && !lpDustBlocked && lpPriceOk && lpCapacityOk && lpDelayOk && lpTimeOk
+      && lpDropOk && !strategyBlocksLp;
     const solverActionTx = solverTx(manifest, wrapper, auction, solverSellAmount, solverMaxBuyAmount, args.recipient);
     const lpActionTx = lpKeeperTx(manifest, wrapper, auction, lpSellAmount, quotedBuyAmount, lpMaxBuyAmount);
+
+    actions.push({
+      type: "roll-strategy-plan",
+      product: wrapper.label,
+      ready: false,
+      auctionId: auction.auctionId,
+      reason: strategyPlan.recommendation,
+      condition: strategyPlan.status === "fail"
+        ? "Strategy gate says this roll should pause, shrink, or wait for more liquidity before the ETH LP vault backstops it."
+        : undefined,
+      strategyPlan,
+    });
 
     actions.push({
       type: "solver-bid",
@@ -896,6 +984,7 @@ function buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedL
       maxPriceWad: solverMaxPriceWad,
       maxBuyAmount: weiToEthText(solverMaxBuyAmount),
       solverModel: modelDecision.model || null,
+      strategyPlan,
       tx: solverActionTx,
       command: commandFromTx(solverActionTx),
     });
@@ -907,6 +996,8 @@ function buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedL
       auctionId: auction.auctionId,
       condition: fillsPaused
         ? "Auction circuit breaker level pauses fills."
+        : strategyBlocksLp
+          ? `Vault strategy plan blocks backstop: ${strategyPlan.recommendation}`
         : lpDustBlocked
           ? "Suggested partial fill is below the auction dust rules; increase --max-fill-eth or fill the remainder."
           : !lpCurrentPriceOk ? "Wait for Dutch price to decay."
@@ -922,6 +1013,7 @@ function buildAuctionActions(manifest, wrappers, auctions, args, auctionStoppedL
       elapsedSeconds: auction.elapsed.toString(),
       timeLeftSeconds: auction.timeLeft.toString(),
       priceDropBps: lpPriceDropBps.toString(),
+      strategyPlan,
       tx: lpActionTx,
       command: commandFromTx(lpActionTx),
     });
@@ -1363,6 +1455,10 @@ async function main() {
     if (action.maxBuyAmount) console.log(`Max pay: ${action.maxBuyAmount}`);
     if (action.quoteEth) console.log(`Quote: ${action.quoteEth}`);
     if (action.minEthOut) console.log(`Min ETH out: ${action.minEthOut}`);
+    if (action.strategyPlan) {
+      console.log(`Strategy: ${action.strategyPlan.action} (${action.strategyPlan.status})`);
+      console.log(`Strategy recommendation: ${action.strategyPlan.recommendation}`);
+    }
     if (action.command) console.log(action.command);
   }
 }
