@@ -39,6 +39,7 @@ Options:
   --keeper-private-key <key>
                             Permissionless keeper key (default: deterministic funded smoke key)
   --no-solver-launch        Skip external solver fill and let the ETH LP vault clear the roll
+  --readiness-only          Deploy, fund the LP vault, run strict readiness, then stop
   --port <port>             Anvil port (default: pick a free local port)
   --keep-anvil              Leave Anvil running after the smoke test
   --json                    Print machine-readable JSON
@@ -63,6 +64,7 @@ function parseArgs(argv) {
     port: 0,
     keepAnvil: false,
     noSolverLaunch: false,
+    readinessOnly: false,
     json: false,
   };
 
@@ -89,6 +91,8 @@ function parseArgs(argv) {
       args.keeperPrivateKey = next();
     } else if (arg === "--no-solver-launch") {
       args.noSolverLaunch = true;
+    } else if (arg === "--readiness-only") {
+      args.readinessOnly = true;
     } else if (arg === "--port") {
       args.port = Number(next());
       if (!Number.isInteger(args.port) || args.port <= 0) throw new Error("--port must be a positive integer");
@@ -372,6 +376,17 @@ async function runLiveSmoke(args) {
       ...(args.noSolverLaunch ? ["--no-solver-launch"] : []),
     ], { timeoutMs: 180_000 });
     record(args.noSolverLaunch ? "Strict no-solver live readiness passed" : "Strict live readiness passed");
+
+    if (args.readinessOnly) {
+      return {
+        status: "pass",
+        mode: args.noSolverLaunch ? "no-solver-readiness" : "manifest-readiness",
+        rpcUrl,
+        tempDir,
+        manifestPath,
+        steps,
+      };
+    }
 
     const steadyTrade = await exerciseMarket({
       rpcUrl,

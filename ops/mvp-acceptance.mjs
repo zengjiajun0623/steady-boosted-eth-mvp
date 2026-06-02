@@ -350,8 +350,15 @@ function buildSteps(args) {
 
   if (args.skipLive) {
     steps.push(skipStep("live", "Manifest readiness", "Skipped by --skip-live."));
+  } else if (!args.rpc && args.localLive) {
+    steps.push({
+      area: "live",
+      name: "Local manifest readiness",
+      command: "node",
+      args: ["ops/local-live-smoke.mjs", "--readiness-only"],
+    });
   } else if (!args.rpc) {
-    steps.push(skipStep("live", "Manifest readiness", "Pass --rpc to include a deployed manifest/readiness check."));
+    steps.push(skipStep("live", "Manifest readiness", "Pass --rpc or --local-live to include a manifest readiness check."));
   } else {
     const readinessArgs = [
       "ops/readiness-check.mjs",
