@@ -11,6 +11,7 @@ const DEFAULT_END = "2026-06-01";
 
 const NODE_CHECKS = [
   "demo/app.js",
+  "ops/demo-page-smoke.mjs",
   "ops/deploy-local-demo.mjs",
   "ops/export-manifest.mjs",
   "ops/frontend-live-surface-check.mjs",
@@ -237,6 +238,12 @@ function buildSteps(args) {
       name: "Python risk script compile",
       command: "python3",
       args: ["-m", "py_compile", ...PYTHON_CHECKS],
+    });
+    steps.push({
+      area: "demo",
+      name: "Static demo page smoke",
+      command: "node",
+      args: ["ops/demo-page-smoke.mjs"],
     });
     steps.push({
       area: "demo",
