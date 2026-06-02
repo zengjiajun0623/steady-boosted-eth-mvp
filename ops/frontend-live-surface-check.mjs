@@ -2,10 +2,13 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
+const execFileAsync = promisify(execFile);
 
 const REQUIRED_DOM_IDS = [
   "connectWallet",
@@ -129,8 +132,74 @@ const EVENT_REQUIREMENTS = [
   ["settlementRedeem", "submitOnchainRedeem"],
 ];
 
+const SELECTOR_SIGNATURES = [
+  ["buyToken", "buyToken(uint256,address)"],
+  ["sellToken", "sellToken(uint256,uint256,address)"],
+  ["ammToken", "token()"],
+  ["deposit", "deposit()"],
+  ["approve", "approve(address,uint256)"],
+  ["quoteBuyToken", "quoteBuyToken(uint256)"],
+  ["quoteSellToken", "quoteSellToken(uint256)"],
+  ["balanceOf", "balanceOf(address)"],
+  ["vaultShare", "share()"],
+  ["activeStrategyEth", "activeStrategyEth()"],
+  ["strategyActive", "strategyActive()"],
+  ["managedAssets", "managedAssets()"],
+  ["convertToShares", "convertToShares(uint256)"],
+  ["convertToAssets", "convertToAssets(uint256)"],
+  ["requestWithdraw", "requestWithdraw(uint256)"],
+  ["claimWithdraw", "claimWithdraw()"],
+  ["withdrawalRequests", "withdrawalRequests(address)"],
+  ["rollAuctionAuction", "auctions(uint256)"],
+  ["rollAuctionPrice", "currentPriceWad(uint256)"],
+  ["rollAuctionResetStatus", "resetStatus(uint256)"],
+  ["rollAuctionStopped", "stopped()"],
+  ["rollAuctionFill", "fill(uint256,uint256,uint256,address)"],
+  ["activeAuctionCount", "activeAuctionCount()"],
+  ["activeAuctionIdAt", "activeAuctionIdAt(uint256)"],
+  ["activeAuctionCountBySeller", "activeAuctionCountBySeller(address)"],
+  ["activeAuctionIdBySellerAt", "activeAuctionIdBySellerAt(address,uint256)"],
+  ["rollSolverMintAndFillP", "mintAndFill(address,address,bytes32,uint256,uint256,uint256,address)"],
+  ["rollSolverMintAndFillN", "mintAndFillN(address,address,bytes32,uint256,uint256,uint256,address)"],
+  ["rollSolverMintAndFillPCallback", "mintAndFillWithCallback(address,address,bytes32,uint256,uint256,uint256,address)"],
+  ["rollSolverMintAndFillNCallback", "mintAndFillNWithCallback(address,address,bytes32,uint256,uint256,uint256,address)"],
+  ["wrapperCurrentToken", "currentToken()"],
+  ["wrapperRollActive", "rollActive()"],
+  ["wrapperRoll", "roll()"],
+  ["keeperCurrentSeriesId", "currentSeriesId()"],
+  ["keeperPendingSeriesId", "pendingSeriesId()"],
+  ["keeperStartRoll", "startRoll(bytes32,uint256,uint256,uint256,uint64)"],
+  ["keeperResetRoll", "resetRoll(uint256,uint256,uint64)"],
+  ["keeperFinalizeRoll", "finalizeRoll()"],
+  ["keeperCancelRoll", "cancelUnfilledRoll()"],
+  ["factorySeries", "series(bytes32)"],
+  ["factorySettle", "settle(bytes32)"],
+  ["factoryMerge", "merge(bytes32,uint256)"],
+  ["factoryRedeemP", "redeemP(bytes32,uint256)"],
+  ["factoryRedeemN", "redeemN(bytes32,uint256)"],
+  ["healthMarket", "marketHealth(address,uint256,uint256)"],
+  ["healthLpVault", "lpVaultHealth(address)"],
+  ["healthWrapper", "wrapperHealth(address)"],
+  ["healthSeries", "seriesHealth(address,bytes32)"],
+  ["healthAuction", "auctionHealth(address,uint256)"],
+];
+
 function assertIncludes(haystack, needle, label, failures) {
   if (!haystack.includes(needle)) failures.push(`${label}: missing "${needle}"`);
+}
+
+function selectorConstant(app, key) {
+  const match = app.match(new RegExp(`${key}:\\s*"(0x[a-fA-F0-9]{8})"`));
+  return match?.[1]?.toLowerCase() || null;
+}
+
+async function castSig(signature) {
+  const { stdout } = await execFileAsync("cast", ["sig", signature], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+  return stdout.trim().toLowerCase();
 }
 
 function printPasses(passes) {
@@ -166,6 +235,22 @@ async function main() {
     assertIncludes(app, selector, `event binding ${control}`, failures);
     assertIncludes(app, handler, `event binding ${control}`, failures);
     if (failures.length === before) passes.push({ area: "events", name: `${control} reaches ${handler}` });
+  }
+
+  const selectorMismatches = [];
+  for (const [key, signature] of SELECTOR_SIGNATURES) {
+    const actual = selectorConstant(app, key);
+    if (!actual) {
+      selectorMismatches.push(`${key}: selector constant missing`);
+      continue;
+    }
+    const expected = await castSig(signature);
+    if (actual !== expected) selectorMismatches.push(`${key}: ${actual} should be ${expected} for ${signature}`);
+  }
+  if (selectorMismatches.length) {
+    for (const mismatch of selectorMismatches) failures.push(`selector drift: ${mismatch}`);
+  } else {
+    passes.push({ area: "selectors", name: "frontend calldata selectors match Solidity signatures" });
   }
 
   if (failures.length) {
