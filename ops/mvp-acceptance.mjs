@@ -141,7 +141,9 @@ function runStep({ area, name, command, args, expectFailure = false }) {
   const stderr = child.stderr || "";
   const failed = child.status !== 0;
   const status = expectFailure ? (failed ? "pass" : "fail") : (failed ? "fail" : "pass");
-  const summary = outputSummary(stdout, stderr, status);
+  const summary = expectFailure && failed
+    ? expectedFailureSummary(stdout, stderr)
+    : outputSummary(stdout, stderr, status);
 
   return {
     area,
@@ -152,7 +154,7 @@ function runStep({ area, name, command, args, expectFailure = false }) {
     code: child.status,
     summary: expectFailure
       ? (failed
-        ? `Expected failure observed.\n${summary}`.trim()
+        ? `Expected rejection observed.\n${summary}`.trim()
         : `Expected command to fail, but it exited 0.\n${summary}`.trim())
       : summary,
   };
@@ -182,6 +184,28 @@ function outputSummary(stdout, stderr, status) {
       || /Error:/i.test(line)
   );
   return (useful.length ? useful : lines).slice(-8).join("\n");
+}
+
+function expectedFailureSummary(stdout, stderr) {
+  const combined = `${stdout}\n${stderr}`.trim();
+  if (!combined) return "";
+  const lines = combined.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const highlights = lines.filter((line) => /^(Recommended action|Recommendation):/i.test(line));
+  const failedChecks = [];
+  let inFailBlock = false;
+  for (const line of lines) {
+    if (line === "FAIL") {
+      inFailBlock = true;
+      continue;
+    }
+    if (line === "PASS" || line === "WARN") {
+      inFailBlock = false;
+      continue;
+    }
+    if (inFailBlock && line.startsWith("- ")) failedChecks.push(line);
+  }
+  const summary = [...highlights, ...failedChecks];
+  return (summary.length ? summary : lines).slice(0, 8).join("\n");
 }
 
 function buildSteps(args) {
