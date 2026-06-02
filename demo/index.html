@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steady ETH Demo</title>
+    <link rel="stylesheet" href="./styles.css?v=settlement-merge" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">ETH roll vault demo</p>
+          <h1 id="appTitle">Steady ETH</h1>
+        </div>
+        <nav class="audience-tabs" aria-label="Audience">
+          <button class="audience-tab is-active" data-page="trader" type="button">Trade</button>
+          <button class="audience-tab" data-page="lp" type="button">Vault</button>
+          <button class="audience-tab" data-page="solver" type="button">Auctions</button>
+        </nav>
+      </header>
+
+      <section class="connection-bar" aria-label="Wallet and contract status">
+        <div>
+          <span id="connectionMode">Simulation mode</span>
+          <strong id="connectionStatus">No deployed contract manifest loaded</strong>
+        </div>
+        <div class="connection-actions">
+          <span id="contractNetwork">Local demo</span>
+          <button id="connectWallet" type="button">Connect wallet</button>
+        </div>
+      </section>
+
+      <section class="page is-active" id="traderPage">
+        <div class="trader-layout">
+          <section class="trade-ticket">
+            <div class="ticket-head">
+              <div>
+                <h2>Trade</h2>
+                <p>Buy or sell.</p>
+              </div>
+            </div>
+
+            <div class="strategy-switch product-switch" aria-label="Trade product">
+              <button class="strategy-button is-active" data-strategy="steady" type="button">
+                <span>Steady ETH</span>
+                <small>Calmer</small>
+              </button>
+              <button class="strategy-button" data-strategy="boosted" type="button">
+                <span>Boosted ETH</span>
+                <small>Upside / downside</small>
+              </button>
+            </div>
+
+            <div class="side-switch" aria-label="Trade side">
+              <button class="side-button is-active" data-side="buy" type="button">Buy</button>
+              <button class="side-button" data-side="sell" type="button">Sell</button>
+            </div>
+
+            <label class="amount-control">
+              <span id="tradeAmountLabel">Trade size</span>
+              <strong id="depositValue">0.5000 ETH</strong>
+              <input id="deposit" type="range" min="0.01" max="12.5" step="0.01" value="0.5" />
+            </label>
+            <div class="amount-presets" aria-label="Trade size presets">
+              <button data-trade-preset="0.1" type="button">0.1</button>
+              <button data-trade-preset="0.5" type="button">0.5</button>
+              <button data-trade-preset="1" type="button">1</button>
+              <button data-trade-preset="max" type="button">Max</button>
+            </div>
+
+            <div class="wallet-row">
+              <span id="walletLabel">Available ETH</span>
+              <strong id="walletBalance">12.50 ETH</strong>
+            </div>
+
+            <button class="trade-action" id="tradeAction" type="button">Buy Steady ETH</button>
+            <p class="trade-status" id="tradeStatus">Demo only.</p>
+          </section>
+
+          <section class="outcome-card result-card">
+            <div class="card-head">
+              <div>
+                <h2 id="resultTitle">Order preview</h2>
+                <p id="resultSub">What you pay and receive.</p>
+              </div>
+              <span class="pill" id="currentSpot">$0 ETH</span>
+            </div>
+
+            <div class="quote-panel">
+              <div>
+                <span id="quotePayLabel">You pay</span>
+                <strong id="quotePay">0 ETH</strong>
+                <small id="quotePayAsset">~ $0</small>
+              </div>
+              <div>
+                <span id="quoteReceiveLabel">You receive</span>
+                <strong id="quoteReceive">0 Steady ETH</strong>
+                <small id="quoteReceiveAsset">Steady ETH</small>
+              </div>
+              <div class="fee-card">
+                <span>Spread</span>
+                <strong id="quoteFee">0 bps</strong>
+                <small>Demo quote</small>
+              </div>
+            </div>
+
+            <details class="details-panel">
+              <summary>
+                <span>Details</span>
+                <strong>Route, limits, settlement</strong>
+              </summary>
+
+              <div class="route-row">
+                <span>Route</span>
+                <strong id="routeText">ETH → Steady ETH</strong>
+              </div>
+
+              <div class="status-grid">
+                <div>
+                  <span>Roll status</span>
+                  <strong id="rollStatus">Normal</strong>
+                </div>
+                <div>
+                  <span>Capacity</span>
+                  <strong id="tradeCapacity">0 ETH</strong>
+                </div>
+              </div>
+
+              <p class="quote-note" id="quoteNote">
+                Auto-rolls before maturity. Final settlement uses a 3-stable ETH TWAP median.
+              </p>
+
+              <details class="series-panel">
+                <summary>
+                  <span>Series details</span>
+                  <strong id="seriesSummary">Auto-managed</strong>
+                </summary>
+                <div class="series-grid" aria-label="Current managed option series">
+                  <div>
+                    <span>Current strike</span>
+                    <strong id="seriesStrike">$0</strong>
+                  </div>
+                  <div>
+                    <span>Maturity</span>
+                    <strong id="seriesMaturity">--</strong>
+                  </div>
+                  <div>
+                    <span>Target roll</span>
+                    <strong id="seriesRoll">--</strong>
+                  </div>
+                </div>
+              </details>
+            </details>
+
+            <details class="scenario-panel">
+              <summary>
+                <span>Future preview</span>
+                <strong id="futurePreviewLabel">Scenario</strong>
+              </summary>
+
+              <div class="future-controls">
+                <label class="amount-control compact">
+                  <span>Date</span>
+                  <strong id="futureDaysValue">90 days</strong>
+                  <input id="futureDays" type="range" min="30" max="365" step="15" value="90" />
+                </label>
+
+                <label class="amount-control compact">
+                  <span>ETH price</span>
+                  <strong id="futurePriceValue">$0</strong>
+                  <input id="futurePrice" type="range" min="500" max="10000" step="50" value="3000" />
+                </label>
+              </div>
+
+              <div class="future-preview">
+                <p class="scenario-note">Scenario estimate, not guaranteed.</p>
+
+                <div class="sim-question">
+                  <span>If ETH is</span>
+                  <strong id="simQuestion">$0</strong>
+                  <small id="simQuestionDate">in 90 days</small>
+                </div>
+
+                <div class="primary-metric">
+                  <span id="primaryLabel">Steady ETH balance</span>
+                  <strong id="primaryValue">$0</strong>
+                  <small id="primarySub">Compared with holding ETH</small>
+                </div>
+
+                <div class="sim-bars primary-comparison" aria-label="Projected future balances">
+                  <div class="sim-bar-row is-selected" data-sim-row="active">
+                    <div class="sim-row-head">
+                      <span id="activeProductLabel">Steady ETH</span>
+                      <strong id="simSteady">$0</strong>
+                    </div>
+                    <div class="bar-track"><div id="simSteadyBar"></div></div>
+                    <small id="simSteadySub">0%</small>
+                  </div>
+                  <div class="sim-bar-row" data-sim-row="eth">
+                    <div class="sim-row-head">
+                      <span>Hold ETH</span>
+                      <strong id="simEth">$0</strong>
+                    </div>
+                    <div class="bar-track"><div id="simEthBar"></div></div>
+                    <small id="simEthSub">0%</small>
+                  </div>
+                  <div class="sim-bar-row advanced-row" data-sim-row="boosted">
+                    <div class="sim-row-head">
+                      <span>Aggressive</span>
+                      <strong id="simBoosted">$0</strong>
+                    </div>
+                    <div class="bar-track"><div id="simBoostedBar"></div></div>
+                    <small id="simBoostedSub">0%</small>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div class="explain-box">
+              <span id="explainKicker">The tradeoff</span>
+              <strong id="explainTitle">Steady ETH is for calmer balances.</strong>
+              <p id="explainText">
+                It tries to reduce downside and gives up part of a big ETH rally.
+              </p>
+            </div>
+          </section>
+
+          <details class="history-panel">
+            <summary>
+              <span>Optional historical check</span>
+              <strong id="traderChartTitle">90-day examples</strong>
+            </summary>
+            <p id="traderChartSub">Examples from past 90-day ETH periods.</p>
+
+            <div class="scenario-grid" aria-label="90 day outcome examples">
+              <article class="scenario-card">
+                <span>Bad 90 days</span>
+                <strong id="scenarioBadActive">$0</strong>
+                <small id="scenarioBadEth">Hold ETH: $0</small>
+              </article>
+              <article class="scenario-card is-main">
+                <span>Typical 90 days</span>
+                <strong id="scenarioTypicalActive">$0</strong>
+                <small id="scenarioTypicalEth">Hold ETH: $0</small>
+              </article>
+              <article class="scenario-card">
+                <span>Good 90 days</span>
+                <strong id="scenarioGoodActive">$0</strong>
+                <small id="scenarioGoodEth">Hold ETH: $0</small>
+              </article>
+            </div>
+
+            <div class="simple-stats">
+              <div>
+                <span>Bad case</span>
+                <strong id="traderBadCase">0%</strong>
+              </div>
+              <div>
+                <span>Typical</span>
+                <strong id="traderTypicalCase">0%</strong>
+              </div>
+              <div>
+                <span>Good case</span>
+                <strong id="traderGoodCase">0%</strong>
+              </div>
+              <div>
+                <span>Worst drawdown</span>
+                <strong id="traderDrawdown">0%</strong>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="page" id="lpPage">
+        <div class="lp-layout">
+          <section class="lp-ticket">
+            <div class="ticket-head">
+              <div>
+                <h2>Vault</h2>
+                <p>Provide liquidity.</p>
+              </div>
+            </div>
+
+            <div class="side-switch vault-mode-switch" aria-label="Vault action">
+              <button class="lp-mode-button is-active" data-lp-mode="deposit" type="button">Deposit</button>
+              <button class="lp-mode-button" data-lp-mode="withdraw" type="button">Withdraw</button>
+            </div>
+
+            <label class="amount-control">
+              <span id="lpAmountLabel">Deposit size</span>
+              <strong id="lpCapitalValue">0.5000 ETH</strong>
+              <input id="lpCapital" type="range" min="0.01" max="10" step="0.01" value="0.5" />
+            </label>
+            <div class="amount-presets" aria-label="Vault deposit presets">
+              <button data-lp-preset="0.1" type="button">0.1</button>
+              <button data-lp-preset="0.5" type="button">0.5</button>
+              <button data-lp-preset="1" type="button">1</button>
+              <button data-lp-preset="max" type="button">Max</button>
+            </div>
+
+            <div class="wallet-row">
+              <span id="lpBalanceLabel">USD equivalent</span>
+              <strong id="lpWalletValue">~ $1,000</strong>
+            </div>
+
+            <div class="wallet-row lp-pending-row">
+              <span>Pending claim</span>
+              <strong id="lpPendingClaim">0 ETH</strong>
+            </div>
+
+            <button class="trade-action" id="lpAction" type="button">Deposit ETH</button>
+            <button class="secondary-action" id="lpClaimAction" type="button">Claim unlocked ETH</button>
+            <p class="trade-status" id="lpStatus">Demo only.</p>
+          </section>
+
+          <section class="outcome-card result-card lp-preview">
+            <div class="card-head">
+              <div>
+                <h2>Liquidity engine</h2>
+                <p>What your liquidity supports.</p>
+              </div>
+              <span class="pill">Protocol LP</span>
+            </div>
+
+            <div class="vault-stat-grid">
+              <article>
+                <span>Available capacity</span>
+                <strong id="steadyCapacity">0 ETH</strong>
+                <small>Backed by vault ETH</small>
+              </article>
+              <article>
+                <span>Est. APR</span>
+                <strong id="lpAprPreview">0%</strong>
+                <small>From roll spread</small>
+              </article>
+              <article>
+                <span>Your deposit</span>
+                <strong id="lpUserDeposit">0 ETH</strong>
+                <small>Demo balance</small>
+              </article>
+              <article>
+                <span>Earned</span>
+                <strong id="lpUserEarned">0 ETH</strong>
+                <small>Demo rewards</small>
+              </article>
+            </div>
+
+            <div class="explain-box">
+              <span>Vault preview</span>
+              <strong id="lpEarningsPreview">0 ETH per roll</strong>
+              <p id="lpEarningsSub">Estimated ETH spread if the vault helps fill a roll auction.</p>
+            </div>
+
+            <details class="details-panel">
+              <summary>
+                <span>Details</span>
+                <strong>Quote, limits, utilization</strong>
+              </summary>
+
+              <div class="status-grid vault-status-grid">
+                <div>
+                  <span>Roll quote</span>
+                  <strong id="rollQuote">0 bps</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong id="quoteStatus">Normal</strong>
+                </div>
+                <div>
+                  <span>Utilization</span>
+                  <strong id="rlpUtilization">0%</strong>
+                </div>
+                <div>
+                  <span>Scale cap</span>
+                  <strong id="lpSeriesCap">0 ETH</strong>
+                </div>
+              </div>
+
+              <label class="amount-control compact">
+                <span>External solver fill</span>
+                <strong><span id="nFillValue">90</span>%</strong>
+                <input id="nFill" type="range" min="0" max="95" step="5" value="90" />
+              </label>
+
+              <label class="amount-control compact">
+                <span>Settlement pool depth</span>
+                <strong>$<span id="lpDepthValue">10</span>m</strong>
+                <input id="lpDepth" type="range" min="1" max="50" step="1" value="10" />
+              </label>
+
+              <div class="cap-meter">
+                <div id="lpCapFill"></div>
+              </div>
+              <p id="lpCapText" class="quiet"></p>
+            </details>
+
+            <details class="scenario-panel lp-mechanics">
+              <summary>
+                <span>How it works</span>
+                <strong>Roll auction flow</strong>
+              </summary>
+
+              <div class="flow">
+                <div class="flow-node">
+                  <span>Traders</span>
+                  <strong>need a roll</strong>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node main">
+                  <span>Vault</span>
+                  <strong>quotes liquidity</strong>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node">
+                  <span>LPs</span>
+                  <strong>earn spread</strong>
+                </div>
+              </div>
+              <canvas id="lpChart" width="1000" height="360" aria-label="LP chart"></canvas>
+            </details>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="solverPage">
+        <div class="solver-layout">
+          <section class="auction-list-card">
+            <div class="ticket-head">
+              <div>
+                <h2>Auction board</h2>
+                <p>Open rolls for solvers and bots.</p>
+              </div>
+              <span class="pill" id="auctionBoardMode">Public</span>
+            </div>
+
+            <div class="auction-list" aria-label="Open roll auctions">
+              <button class="auction-row is-active" data-auction="steady" type="button">
+                <div class="auction-row-main">
+                  <span>Steady roll</span>
+                  <strong id="steadyAuctionSize">0 ETH</strong>
+                  <small>old Steady ETH → next Steady ETH</small>
+                </div>
+                <div class="auction-row-price">
+                  <em id="steadyAuctionPrice">0.000x</em>
+                  <small id="steadyAuctionState">Open</small>
+                </div>
+                <dl class="auction-row-stats">
+                  <div>
+                    <dt>Edge</dt>
+                    <dd id="steadyAuctionEdge">0 bps</dd>
+                  </div>
+                  <div>
+                    <dt>Left</dt>
+                    <dd id="steadyAuctionTime">0h</dd>
+                  </div>
+                </dl>
+              </button>
+              <button class="auction-row" data-auction="boosted" type="button">
+                <div class="auction-row-main">
+                  <span>Boosted roll</span>
+                  <strong id="boostedAuctionSize">0 ETH</strong>
+                  <small>old Boosted ETH → next Boosted ETH</small>
+                </div>
+                <div class="auction-row-price">
+                  <em id="boostedAuctionPrice">0.000x</em>
+                  <small id="boostedAuctionState">Open</small>
+                </div>
+                <dl class="auction-row-stats">
+                  <div>
+                    <dt>Edge</dt>
+                    <dd id="boostedAuctionEdge">0 bps</dd>
+                  </div>
+                  <div>
+                    <dt>Left</dt>
+                    <dd id="boostedAuctionTime">0h</dd>
+                  </div>
+                </dl>
+              </button>
+            </div>
+            <p class="auction-empty" id="auctionEmptyState" hidden>No open roll auctions.</p>
+          </section>
+
+          <section class="outcome-card result-card solver-card">
+            <div class="card-head">
+              <div>
+                <h2 id="solverTitle">Bid preview</h2>
+                <p id="solverSub">Fill part of a roll auction.</p>
+              </div>
+              <span class="pill" id="solverMode">Dutch</span>
+            </div>
+
+            <label class="amount-control">
+              <span>Fill size</span>
+              <strong id="solverFillValue">0 ETH</strong>
+              <input id="solverFill" type="range" min="0.1" max="10" step="0.1" value="2" />
+            </label>
+
+            <div class="quote-panel solver-quote">
+              <div>
+                <span id="solverPayLabel">You pay</span>
+                <strong id="solverPay">0 next token</strong>
+                <small id="solverPaySub">Auction price</small>
+              </div>
+              <div>
+                <span>You receive</span>
+                <strong id="solverReceive">0 old token</strong>
+                <small id="solverReceiveSub">Plus paired inventory</small>
+              </div>
+              <div class="fee-card is-visible">
+                <span>Implied edge</span>
+                <strong id="solverEdge">0 bps</strong>
+                <small id="solverEdgeSub">vs 1:1 fair roll</small>
+              </div>
+            </div>
+
+            <div class="status-grid solver-status-grid">
+              <div>
+                <span>Current price</span>
+                <strong id="solverPrice">0.000x</strong>
+              </div>
+              <div>
+                <span>Floor</span>
+                <strong id="solverFloor">0.000x</strong>
+              </div>
+              <div>
+                <span>Time left</span>
+                <strong id="solverTimeLeft">0h</strong>
+              </div>
+              <div>
+                <span>Backstop</span>
+                <strong id="solverBackstop">ETH LP vault</strong>
+              </div>
+            </div>
+
+            <div class="solver-route-note">
+              <span>Solver route</span>
+              <strong id="solverRoute">Atomic mint + fill</strong>
+              <small id="solverRouteSub">Bid without pre-holding the next token.</small>
+            </div>
+
+            <button class="trade-action" id="solverAction" type="button">Simulate bid</button>
+            <p class="trade-status" id="solverStatus">Demo only.</p>
+
+            <details class="scenario-panel solver-mechanics">
+              <summary>
+                <span>Mechanics</span>
+                <strong>How a solver fills</strong>
+              </summary>
+
+              <div class="flow">
+                <div class="flow-node">
+                  <span>Mint</span>
+                  <strong>next pair</strong>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node main">
+                  <span>Bid</span>
+                  <strong>public auction</strong>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-node">
+                  <span>Keep</span>
+                  <strong id="solverInventory">inventory</strong>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section class="outcome-card result-card keeper-card">
+            <div class="card-head">
+              <div>
+                <h2>Wrapper keeper</h2>
+                <p id="keeperSub">Permissionless roll lifecycle.</p>
+              </div>
+              <span class="pill" id="keeperMode">Idle</span>
+            </div>
+
+            <div class="status-grid keeper-status-grid">
+              <div>
+                <span>Wrapper</span>
+                <strong id="keeperProduct">Steady ETH</strong>
+              </div>
+              <div>
+                <span>Inventory</span>
+                <strong id="keeperInventory">0 ETH</strong>
+              </div>
+              <div>
+                <span>Next series</span>
+                <strong id="keeperNextSeries">Not set</strong>
+              </div>
+              <div>
+                <span>Roll auction</span>
+                <strong id="keeperAuction">None</strong>
+              </div>
+            </div>
+
+            <div class="keeper-actions" aria-label="Wrapper keeper actions">
+              <button class="secondary-action" id="keeperStartRoll" type="button">Start roll</button>
+              <button class="secondary-action" id="keeperResetRoll" type="button">Reset</button>
+              <button class="secondary-action" id="keeperFinalizeRoll" type="button">Finalize</button>
+              <button class="secondary-action" id="keeperCancelRoll" type="button">Cancel</button>
+            </div>
+            <p class="trade-status" id="keeperStatus">Demo only.</p>
+
+            <details class="scenario-panel keeper-mechanics">
+              <summary>
+                <span>Policy</span>
+                <strong>Safe defaults</strong>
+              </summary>
+
+              <div class="status-grid keeper-status-grid">
+                <div>
+                  <span>Start price</span>
+                  <strong id="keeperStartPrice">1.010x</strong>
+                </div>
+                <div>
+                  <span>Floor</span>
+                  <strong id="keeperFloorPrice">0.990x</strong>
+                </div>
+                <div>
+                  <span>Duration</span>
+                  <strong id="keeperDuration">24h</strong>
+                </div>
+                <div>
+                  <span>Who can call</span>
+                  <strong>Anyone</strong>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section class="outcome-card result-card settlement-card">
+            <div class="card-head">
+              <div>
+                <h2>Maturity settlement</h2>
+                <p id="settlementSub">For matured direct series tokens.</p>
+              </div>
+              <span class="pill" id="settlementMode">Waiting</span>
+            </div>
+
+            <div class="status-grid settlement-status-grid">
+              <div>
+                <span>Token</span>
+                <strong id="settlementProduct">Steady ETH</strong>
+              </div>
+              <div>
+                <span>Series</span>
+                <strong id="settlementSeries">Not set</strong>
+              </div>
+              <div>
+                <span>Maturity</span>
+                <strong id="settlementMaturity">Not due</strong>
+              </div>
+              <div>
+                <span>Settlement price</span>
+                <strong id="settlementPrice">Pending</strong>
+              </div>
+            </div>
+
+            <div class="quote-panel settlement-quote">
+              <div>
+                <span>Your balance</span>
+                <strong id="settlementBalance">0 Steady ETH</strong>
+                <small id="settlementBalanceSub">Direct wallet token balance</small>
+              </div>
+              <div>
+                <span>Redeemable ETH</span>
+                <strong id="settlementRedeemable">0 ETH</strong>
+                <small id="settlementRedeemableSub">After settlement</small>
+              </div>
+              <div>
+                <span>Matched pair</span>
+                <strong id="settlementMergeable">0 ETH</strong>
+                <small id="settlementMergeableSub">Merge before settlement</small>
+              </div>
+            </div>
+
+            <div class="settlement-actions" aria-label="Settlement actions">
+              <button class="secondary-action" id="settlementMerge" type="button">Merge pair</button>
+              <button class="secondary-action" id="settlementSettle" type="button">Settle series</button>
+              <button class="secondary-action" id="settlementRedeem" type="button">Redeem tokens</button>
+            </div>
+            <p class="trade-status" id="settlementStatus">Demo only.</p>
+          </section>
+
+          <section class="outcome-card result-card operator-card">
+            <div class="card-head">
+              <div>
+                <h2>Operator health</h2>
+                <p id="operatorSub">Market depth, vault capacity, and roll readiness.</p>
+              </div>
+              <span class="pill" id="operatorMode">Demo</span>
+            </div>
+
+            <div class="status-grid operator-status-grid">
+              <div>
+                <span>Market depth</span>
+                <strong id="operatorMarketDepth">0 ETH</strong>
+                <small id="operatorMarketDepthSub">Steady + Boosted pools</small>
+              </div>
+              <div>
+                <span>Vault utilization</span>
+                <strong id="operatorVaultUtil">0%</strong>
+                <small id="operatorVaultUtilSub">Backstop risk budget</small>
+              </div>
+              <div>
+                <span>Roll state</span>
+                <strong id="operatorRollState">Idle</strong>
+                <small id="operatorRollStateSub">Wrapper auctions</small>
+              </div>
+              <div>
+                <span>Series capacity</span>
+                <strong id="operatorSeriesCap">0 ETH</strong>
+                <small id="operatorSeriesCapSub">Open interest limit</small>
+              </div>
+            </div>
+          </section>
+
+          <section class="auction-note">
+            <div>
+              <span>MakerDAO lesson</span>
+              <strong>Make keeper work obvious.</strong>
+              <p>
+                Solvers need a public board with amount, price, edge, time left, and state. Traders do not need to see this machinery.
+              </p>
+            </div>
+              <div>
+                <span>Hyperliquid lesson</span>
+              <strong>The vault is the liquidity engine.</strong>
+              <p>
+                Small caps can launch with the ETH LP vault. External solvers compete to improve price, and capacity grows only when rolls stay cheap.
+              </p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="faq-section" aria-labelledby="faqTitle">
+        <div class="section-label">
+          <div>
+            <span>FAQ</span>
+            <h2 id="faqTitle">Common questions</h2>
+          </div>
+        </div>
+
+        <div class="faq-list">
+          <details>
+            <summary>What am I buying?</summary>
+            <p>
+              Steady ETH and Boosted ETH are ETH exposure tokens. You are changing the risk profile of your ETH, not buying a dollar stablecoin.
+            </p>
+          </details>
+
+          <details>
+            <summary>Why can I only trade with ETH?</summary>
+            <p>
+              The simple MVP flow is ETH in and ETH out. If someone starts with USDC, they can swap to ETH first, then choose Steady ETH or Boosted ETH.
+            </p>
+          </details>
+
+          <details>
+            <summary>What does the vault do?</summary>
+            <p>
+              LPs deposit ETH into the protocol liquidity engine. The vault helps rolls clear and earns spread when it fills demand.
+            </p>
+          </details>
+
+          <details>
+            <summary>Who fills roll auctions?</summary>
+            <p>
+              External solvers can bid directly to improve execution. At small launch caps, the ETH LP vault can also clear rolls after a short solver-first window.
+            </p>
+          </details>
+
+          <details>
+            <summary>What is the main vault risk?</summary>
+            <p>
+              The vault can underperform simply holding ETH if inventory or roll pricing moves against it. Returns are not guaranteed.
+            </p>
+          </details>
+
+          <details>
+            <summary>How is settlement priced?</summary>
+            <p>
+              Final pricing uses the median of USDC, USDT, and DAI Uniswap TWAPs, so one stablecoin source cannot set settlement by itself.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <dialog class="deposit-modal" id="lpDepositDialog">
+        <form class="deposit-card" method="dialog">
+          <button class="modal-close" id="lpCancelDeposit" type="button" aria-label="Close deposit dialog">×</button>
+          <h2 id="lpModalTitle">Deposit</h2>
+          <p id="lpModalText">Deposit ETH into the shared roll vault. Withdrawals unlock after 4 days.</p>
+            <div class="modal-amount">
+              <span id="lpModalAmountLabel">Amount</span>
+              <strong id="lpModalAmount">0.5000 ETH</strong>
+            </div>
+          <button class="trade-action" id="lpConfirmDeposit" type="button">Confirm Deposit</button>
+          <p class="risk-note">
+            You stay exposed to ETH price. The vault can underperform holding ETH if market-making inventory loses value.
+          </p>
+        </form>
+      </dialog>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

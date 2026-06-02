@@ -1,0 +1,62 @@
+{
+  "mode": "simulation",
+  "chainId": null,
+  "contracts": {
+    "factory": null,
+    "oracle": null,
+    "rollAuction": null,
+    "rollSolver": null,
+    "healthLens": null,
+    "lpKeeper": null,
+    "lpVault": null,
+    "steadyKeeper": null,
+    "boostedKeeper": null,
+    "steadyVault": null,
+    "boostedVault": null,
+    "steadyMarket": null,
+    "boostedMarket": null
+  },
+  "series": {
+    "firstSeriesId": null,
+    "secondSeriesId": null,
+    "firstP": null,
+    "firstN": null,
+    "secondP": null,
+    "secondN": null,
+    "steadyShare": null,
+    "boostedShare": null
+  },
+  "inventoryMarkets": {
+    "firstP": null,
+    "firstN": null,
+    "secondP": null,
+    "secondN": null
+  },
+  "auctions": {
+    "steady": {
+      "auctionId": null,
+      "newSeriesId": null,
+      "fillMode": "mintAndFillWithCallback",
+      "slippageBps": 50,
+      "remainingEth": null,
+      "price": null,
+      "ui": {
+        "floorPrice": null,
+        "timeLeft": null
+      }
+    },
+    "boosted": {
+      "auctionId": null,
+      "newSeriesId": null,
+      "fillMode": "mintAndFillNWithCallback",
+      "slippageBps": 50,
+      "remainingEth": null,
+      "price": null,
+      "ui": {
+        "floorPrice": null,
+        "timeLeft": null
+      }
+    }
+  },
+  "notes": "Template manifest. Export deployed addresses with ops/export-manifest.mjs for local-live mode."
+}
