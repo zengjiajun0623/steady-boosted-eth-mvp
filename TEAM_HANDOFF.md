@@ -59,8 +59,9 @@ node ops/mvp-acceptance.mjs --local-live
 ```
 
 That acceptance command starts a fresh local chain, deploys the MVP, seeds the
-markets, checks readiness, exercises trader buy/sell flows, runs external-solver
-and no-solver roll paths, and verifies LP inventory cleanup.
+vault and optional demo markets, checks readiness, exercises vault-backed trader
+buy/sell flows, runs external-solver and no-solver roll paths, and verifies LP
+inventory cleanup.
 
 ## Demo Evidence
 
@@ -129,13 +130,13 @@ These are product invariants, not preferences.
 
 ```text
 Trader liquidity:
-  EthTokenAMM markets for Steady ETH / ETH and Boosted ETH / ETH
+  EthLPVault quotes and fills Steady ETH / ETH and Boosted ETH / ETH trades
 
 Roll liquidity:
   RollAuction public Dutch auctions for wrapper maturity rotation
 
 Bootstrap liquidity:
-  EthLPVault plus EthLPVaultKeeper for roll backstops and vault-owned AMM liquidity
+  EthLPVault plus EthLPVaultKeeper for trader fills, roll backstops, and inventory cleanup
 
 External competition:
   RollSolver and keeper-runner solver actions
@@ -150,10 +151,11 @@ Readiness:
 The clean mental model is:
 
 ```text
-AMMs help traders enter and exit.
+The Protocol ETH Liquidity Vault helps traders enter and exit.
 Auctions discover roll counterparties.
-The ETH LP vault bootstraps liquidity and caps product growth.
+The same ETH LP vault bootstraps liquidity and caps product growth.
 Solvers compete to improve pricing before the vault steps in.
+Secondary AMMs can be added later, but they are not the required MVP trader route.
 ```
 
 ## Useful Files
@@ -195,9 +197,10 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 2. Vault strategy
 
 Extend the deterministic strategy planner into dashboard and keeper-runner
-workflows around bid sizing, inventory cleanup, AMM liquidity provision,
-solver-first delay, and risk reporting. The vault should remain the transparent
-protocol liquidity engine, not a hidden discretionary bailout.
+workflows around bid sizing, direct inventory cleanup, optional secondary AMM
+liquidity provision, solver-first delay, and risk reporting. The vault should
+remain the transparent protocol liquidity engine, not a hidden discretionary
+bailout.
 
 3. Solver market
 

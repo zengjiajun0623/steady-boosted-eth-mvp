@@ -132,7 +132,7 @@ sell Boosted ETH: Boosted wrapper share -> ETH
 
 The wrapper share is the user-facing token. It can keep trading against ETH even
 when the wrapper rolls its internal `P` or `N` inventory from one maturity to the
-next. This avoids rebuilding the trader market every time a series changes.
+next. This avoids rebuilding any secondary market every time a series changes.
 
 `EthTokenAMM` is still a minimal constant-product pool with LP shares and
 slippage limits. This is enough for the MVP to test secondary liquidity without
@@ -675,7 +675,7 @@ health lens reads auction circuit-breaker and wrapper keeper policy
 economic stress gate targets <= 10 bps weighted roll cost before raising capacity
 no-solver launch capacity gate passes with LP-vault capital as the liquidity engine
 local live smoke proves the ETH LP vault can clear a roll without external solver fill
-trader slippage limits protect AMM swaps
+trader slippage limits protect optional secondary AMM swaps
 AMM LP can remove liquidity after earning swap fees
 Steady wrapper can deposit/redeem current P exposure
 Steady wrapper can roll old P to new P through public auction
@@ -711,7 +711,8 @@ seller can cancel unfilled inventory
 Connect the vault strategy policy and deployment layer:
 
 ```text
-Market deployment: seed AMM pools or external DEX pools for wrapper shares
+Vault strategy: make the vault-backed trader route, roll backstop, and inventory cleanup dashboard-ready
+Secondary liquidity: optionally seed AMM or external DEX pools for wrapper shares after the vault route is live
 Pilot operations: tune keeper bounty sizing and publish runbooks
 Settlement UX: add richer post-roll/residual inventory views
 Auction indexing: optionally add event/indexer indexing for historical analytics
