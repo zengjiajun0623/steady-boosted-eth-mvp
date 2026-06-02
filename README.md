@@ -134,6 +134,10 @@ vault clears the roll alone. Both paths finalize the wrapper roll, redeem and
 close LP inventory, and check that LP managed ETH increased from the
 market-making spread.
 
+GitHub Actions runs the same local-live acceptance gate on pushes and pull
+requests to `main`, so team changes should keep the contracts, demo, operators,
+economics, and no-solver launch path green before merging.
+
 Implemented:
 
 ```text
