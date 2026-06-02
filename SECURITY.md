@@ -31,7 +31,8 @@ node ops/production-readiness.mjs \
 This is intentionally stricter than the MVP acceptance gate. The MVP gate proves
 the local product works; the production gate re-runs that acceptance suite and
 also requires external safety evidence and a live mainnet-ready deployment
-manifest.
+manifest. Evidence files must be real final artifacts, not placeholders,
+examples, TODO notes, or draft-only documents.
 
 ## Reporting Security Issues
 

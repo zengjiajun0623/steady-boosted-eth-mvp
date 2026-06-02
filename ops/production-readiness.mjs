@@ -206,6 +206,30 @@ function checkEvidenceFile(checks, area, name, file, detail) {
     fail(checks, area, name, `${detail} File is empty: ${file}.`, { file });
     return;
   }
+  const text = readText(file);
+  const placeholderPatterns = [
+    [/\bTODO\b/i, "TODO"],
+    [/\bTBD\b/i, "TBD"],
+    [/\bplaceholder\b/i, "placeholder"],
+    [/\btemplate\b/i, "template"],
+    [/\bexample\b/i, "example"],
+    [/\bsample\b/i, "sample"],
+    [/\bnot complete\b/i, "not complete"],
+    [/\bnot approved\b/i, "not approved"],
+    [/\bnot signed\b/i, "not signed"],
+    [/\bdraft only\b/i, "draft only"],
+  ];
+  const placeholders = placeholderPatterns.filter(([pattern]) => pattern.test(text)).map(([, label]) => label);
+  if (placeholders.length) {
+    fail(
+      checks,
+      area,
+      name,
+      `${detail} Evidence still looks like a placeholder or draft: ${placeholders.join(", ")}.`,
+      { file, placeholders },
+    );
+    return;
+  }
   pass(checks, area, name, `Evidence file exists: ${file}.`, { file, bytes: size });
 }
 

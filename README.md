@@ -399,6 +399,8 @@ That gate intentionally fails today. It should keep failing until the full
 local acceptance suite, a real production manifest, external audit evidence,
 incident response runbook, solver/liquidity commitments, mainnet oracle
 preflight, and strict live readiness all pass.
+The evidence files must be real final artifacts; the gate rejects empty files
+and obvious placeholder, example, TODO, or draft language.
 
 Known gaps before real value:
 
