@@ -6,6 +6,15 @@ https://ethresear.ch/t/building-index-tracking-assets-on-top-of-options-instead-
 
 The first model focuses on a USD-tracking `P_K` token backed by ETH.
 
+## Team Handoff
+
+Start with `TEAM_HANDOFF.md` if you are joining the project. It explains the
+product mental model, the strict invariants, the test commands, and the next
+workstreams.
+
+Use `CONTRIBUTING.md` for PR expectations and `SECURITY.md` for the current
+security posture.
+
 ## Token model
 
 For a strike `K` in USD per ETH, one dollar-normalized `P_K` unit is backed by
