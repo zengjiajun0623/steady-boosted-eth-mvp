@@ -58,6 +58,11 @@ roll loss path caused by series basis risk. The vault share price can go down
 after a roll, so LP returns must be presented as market-making PnL with risk,
 not as guaranteed yield.
 
+The wrapper keeper now blocks normal rolls across changed strike, TWAP window,
+or settlement oracle. This keeps the simplified MVP from presenting a
+basis-changing migration as a cheap maturity roll; any future dynamic-strike
+roll needs an explicit valuation and risk policy.
+
 Settlement coverage includes 3-stable median TWAP tests that reject missing or
 out-of-band sources, ignore one low or high issuer outlier, and fuzz that
 settlement equals the median of the three source prices.

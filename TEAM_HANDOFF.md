@@ -142,8 +142,8 @@ ops/capacity-policy.py          ETH-denominated capacity gate
 1. Production deployment readiness
 
    Prove the `--rpc` readiness path against a real deployed manifest, including
-   oracle metadata, pinned sellers, keeper policies, auction limits, and capacity
-   checks.
+   oracle metadata, compatible first/second series metadata, pinned sellers,
+   keeper policies, auction limits, and capacity checks.
 
 2. Vault strategy
 

@@ -3,14 +3,23 @@ pragma solidity ^0.8.24;
 
 import {EthOptionsFactory} from "../EthOptionsFactory.sol";
 import {RollAuction} from "../RollAuction.sol";
+import {ISettlementOracle} from "../oracle/ISettlementOracle.sol";
 import {MintBurnToken} from "../token/MintBurnToken.sol";
 import {SeriesExposureVault} from "./SeriesExposureVault.sol";
 
 /// @notice Permissionless keeper facade for Steady/Boosted exposure wrappers.
 /// @dev The keeper should be set as the wrapper manager. Anyone can call safe
 /// roll lifecycle methods, while this contract validates the factory series,
-/// token side, auction venue, and roll price policy.
+/// token side, series metadata compatibility, auction venue, and roll price policy.
 contract SeriesExposureVaultKeeper {
+    struct SeriesPolicy {
+        MintBurnToken token;
+        uint256 strike;
+        uint64 maturity;
+        uint32 twapWindow;
+        ISettlementOracle oracle;
+    }
+
     EthOptionsFactory public immutable factory;
     RollAuction public immutable auction;
     bool public immutable boostedSide;
@@ -85,10 +94,10 @@ contract SeriesExposureVaultKeeper {
         if (msg.sender != deployer) revert NotDeployer();
         if (address(vault) != address(0)) revert VaultAlreadySet();
 
-        (MintBurnToken expectedToken,) = _seriesToken(initialSeriesId);
+        SeriesPolicy memory initial = _seriesPolicy(initialSeriesId);
         if (
             address(vault_) == address(0) || vault_.manager() != address(this)
-                || address(vault_.currentToken()) != address(expectedToken)
+                || address(vault_.currentToken()) != address(initial.token)
         ) {
             revert InvalidVault();
         }
@@ -114,16 +123,17 @@ contract SeriesExposureVaultKeeper {
             revert RollPolicyViolation();
         }
 
-        (MintBurnToken currentToken, uint64 currentMaturity) = _seriesToken(currentSeriesId);
-        (MintBurnToken nextToken, uint64 nextMaturity) = _seriesToken(nextSeriesId);
+        SeriesPolicy memory current = _seriesPolicy(currentSeriesId);
+        SeriesPolicy memory next = _seriesPolicy(nextSeriesId);
         if (
-            nextSeriesId == currentSeriesId || nextMaturity <= currentMaturity
-                || address(wrapper.currentToken()) != address(currentToken)
+            nextSeriesId == currentSeriesId || next.maturity <= current.maturity || next.strike != current.strike
+                || next.twapWindow != current.twapWindow || address(next.oracle) != address(current.oracle)
+                || address(wrapper.currentToken()) != address(current.token)
         ) {
             revert InvalidSeries();
         }
 
-        auctionId = wrapper.startRoll(auction, nextToken, sellAmount, startPriceWad, endPriceWad, duration);
+        auctionId = wrapper.startRoll(auction, next.token, sellAmount, startPriceWad, endPriceWad, duration);
         pendingSeriesId = nextSeriesId;
 
         emit RollStarted(currentSeriesId, nextSeriesId, auctionId);
@@ -182,12 +192,13 @@ contract SeriesExposureVaultKeeper {
         if (address(wrapper) == address(0)) revert InvalidVault();
     }
 
-    function _seriesToken(bytes32 seriesId) internal view returns (MintBurnToken token, uint64 maturity) {
+    function _seriesPolicy(bytes32 seriesId) internal view returns (SeriesPolicy memory policy) {
         MintBurnToken pToken;
         MintBurnToken nToken;
-        (, maturity,,,,, pToken, nToken,,,) = factory.series(seriesId);
-        token = boostedSide ? nToken : pToken;
-        if (address(token) == address(0)) revert InvalidSeries();
+        (policy.strike, policy.maturity, policy.twapWindow,,,, pToken, nToken, policy.oracle,,) =
+            factory.series(seriesId);
+        policy.token = boostedSide ? nToken : pToken;
+        if (address(policy.token) == address(0) || address(policy.oracle) == address(0)) revert InvalidSeries();
     }
 
     function _payKeeper(address keeper, bytes4 selector) internal {

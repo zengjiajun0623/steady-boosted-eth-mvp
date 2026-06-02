@@ -1266,6 +1266,41 @@ function checkAuctionAndSeries(checks, manifest, health, args) {
       { twapWindow: series.twapWindow, minSettlementTwapSeconds: args.minSettlementTwapSeconds },
     );
   }
+
+  const firstSeries = health.series.first;
+  const secondSeries = health.series.second;
+  addCheck(
+    checks,
+    secondSeries.maturity > firstSeries.maturity ? "pass" : "fail",
+    "risk",
+    "normal wrapper roll advances maturity",
+    `First maturity=${firstSeries.maturity.toString()}; second maturity=${secondSeries.maturity.toString()}.`,
+    { firstMaturity: firstSeries.maturity, secondMaturity: secondSeries.maturity },
+  );
+  addCheck(
+    checks,
+    firstSeries.strike === secondSeries.strike ? "pass" : "fail",
+    "risk",
+    "normal wrapper roll keeps the same strike",
+    `First strike=${firstSeries.strike.toString()}; second strike=${secondSeries.strike.toString()}.`,
+    { firstStrike: firstSeries.strike, secondStrike: secondSeries.strike },
+  );
+  addCheck(
+    checks,
+    firstSeries.twapWindow === secondSeries.twapWindow ? "pass" : "fail",
+    "risk",
+    "normal wrapper roll keeps the same TWAP window",
+    `First TWAP window=${firstSeries.twapWindow.toString()}s; second TWAP window=${secondSeries.twapWindow.toString()}s.`,
+    { firstTwapWindow: firstSeries.twapWindow, secondTwapWindow: secondSeries.twapWindow },
+  );
+  addCheck(
+    checks,
+    sameAddress(firstSeries.oracle, secondSeries.oracle) ? "pass" : "fail",
+    "risk",
+    "normal wrapper roll keeps the same oracle",
+    `First oracle=${firstSeries.oracle}; second oracle=${secondSeries.oracle}.`,
+    { firstOracle: firstSeries.oracle, secondOracle: secondSeries.oracle },
+  );
 }
 
 function checkSettlementOracles(checks, manifest, health, rpcChainId) {

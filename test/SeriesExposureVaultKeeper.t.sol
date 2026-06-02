@@ -213,6 +213,29 @@ contract SeriesExposureVaultKeeperTest {
         keeper.setVault(wrongVault, oldSeriesId);
     }
 
+    function testKeeperRejectsIncompatibleSeriesMetadata() public {
+        _deposit(steadyVault, oldP, 1 ether);
+
+        bytes32 differentStrike =
+            factory.createSeries(1_100e18, uint64(block.timestamp + 75 days), TWAP_WINDOW, CAP, oracle);
+        vm.prank(caller);
+        vm.expectRevert(SeriesExposureVaultKeeper.InvalidSeries.selector);
+        steadyKeeper.startRoll(differentStrike, 1 ether, 1.01e18, 0.99e18, 1 days);
+
+        bytes32 differentTwap =
+            factory.createSeries(STRIKE, uint64(block.timestamp + 90 days), 48 hours, CAP, oracle);
+        vm.prank(caller);
+        vm.expectRevert(SeriesExposureVaultKeeper.InvalidSeries.selector);
+        steadyKeeper.startRoll(differentTwap, 1 ether, 1.01e18, 0.99e18, 1 days);
+
+        MockSettlementOracle otherOracle = new MockSettlementOracle();
+        bytes32 differentOracle =
+            factory.createSeries(STRIKE, uint64(block.timestamp + 105 days), TWAP_WINDOW, CAP, otherOracle);
+        vm.prank(caller);
+        vm.expectRevert(SeriesExposureVaultKeeper.InvalidSeries.selector);
+        steadyKeeper.startRoll(differentOracle, 1 ether, 1.01e18, 0.99e18, 1 days);
+    }
+
     function testUnfilledRollCanOnlyBeCancelledAfterAuctionDuration() public {
         _deposit(steadyVault, oldP, 1 ether);
         vm.deal(address(steadyKeeper), 2 * KEEPER_REWARD);

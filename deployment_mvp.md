@@ -404,10 +404,11 @@ The checker reads only public state. It verifies deployed bytecode, live
 Steady/Boosted trader market reserves and sample quotes, LP vault manager and
 backstop policy, LP vault inventory visibility, wrapper keeper wiring, auction
 circuit-breaker state, solver helper availability, settlement oracle wiring,
-per-series cap usage, wrapper deposit capacity staying inside the keeper roll
-cap, live cap alignment against committed LP/Boosted/solver liquidity, and a
-decentralized liveness gate across the trader, LP, solver, wrapper-keeper,
-auction, and settlement surfaces. The
+first/second series compatibility for normal wrapper rolls, per-series cap
+usage, wrapper deposit capacity staying inside the keeper roll cap, live cap
+alignment against committed LP/Boosted/solver liquidity, and a decentralized
+liveness gate across the trader, LP, solver, wrapper-keeper, auction, and
+settlement surfaces. The
 default gate warns if the LP vault has less than `0.1 ETH` managed because
 trader markets can be live while the roll backstop is still unfunded.
 

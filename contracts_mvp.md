@@ -198,7 +198,7 @@ The keeper checks:
 
 ```text
 current wrapper token matches the expected factory P/N side
-next series is the same side and has a later maturity
+next series is the same side, has a later maturity, and matches strike/TWAP/oracle metadata
 roll auction is the configured public auction contract
 roll sell amount is above the immutable dust threshold
 roll sell amount is at or below the immutable product roll cap
@@ -232,16 +232,18 @@ optionally fund keeper reward pool for start/reset/finalize/cancel bounties
 
 Unlike a free-form manager, the keeper cannot pick arbitrary tokens or auction
 parameters. It can only roll the wrapper's current factory series into a later
-series of the same side, through the configured `RollAuction`, within immutable
-price, duration, minimum-size, and maximum-size limits. The maximum roll size is
-the product's market-depth cap. In the pilot deployers, wrapper `maxAssets` is
-set to the same cap so ordinary deposits cannot grow the product beyond cheap
-roll capacity. If direct transfers or later integrations push a wrapper above
-that cap, the keeper will not launch a roll auction that the solver/vault market
-may be unable to clear. If the keeper reward pool is funded,
-start/reset/finalize/cancel calls can pay a fixed bounty to the caller. This
-makes the whole roll lifecycle keeper-friendly without giving keepers discretion
-over roll terms.
+compatible series of the same side, through the configured `RollAuction`, within
+immutable price, duration, minimum-size, and maximum-size limits. Compatible
+means the next series uses the same strike, settlement TWAP window, and oracle;
+future dynamic-strike migrations need a separate valuation policy instead of
+being treated as a normal cheap roll. The maximum roll size is the product's
+market-depth cap. In the pilot deployers, wrapper `maxAssets` is set to the same
+cap so ordinary deposits cannot grow the product beyond cheap roll capacity. If
+direct transfers or later integrations push a wrapper above that cap, the keeper
+will not launch a roll auction that the solver/vault market may be unable to
+clear. If the keeper reward pool is funded, start/reset/finalize/cancel calls
+can pay a fixed bounty to the caller. This makes the whole roll lifecycle
+keeper-friendly without giving keepers discretion over roll terms.
 
 ### `RollAuction`
 
