@@ -1504,12 +1504,21 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
   const marketsReady = Object.values(health.markets).every(
     (market) => market.hasLiquidity && market.sampleBuyTokenOut > 0n && market.sampleSellEthOut > 0n,
   );
-  const lpReady =
-    sameAddress(health.lpVault.manager, manifest.contracts.lpKeeper) &&
-    sameAddress(health.lpKeeper?.vault, manifest.contracts.lpVault) &&
+  const lpVaultAttached = sameAddress(health.lpKeeper?.vault, manifest.contracts.lpVault);
+  const lpRollSellersPinned =
     health.lpKeeper?.rollSellersSet &&
     sameAddress(health.lpKeeper?.steadyRollSeller, manifest.contracts.steadyVault) &&
-    sameAddress(health.lpKeeper?.boostedRollSeller, manifest.contracts.boostedVault) &&
+    sameAddress(health.lpKeeper?.boostedRollSeller, manifest.contracts.boostedVault);
+  const wrapperSetupClosed = Object.entries(health.wrappers).every(([key]) => {
+    const keeper = health.wrapperKeepers[key];
+    const expectedVault = key === "boosted" ? manifest.contracts.boostedVault : manifest.contracts.steadyVault;
+    return keeper?.vaultSet && sameAddress(keeper.vault, expectedVault);
+  });
+  const oneTimeSetupClosed = lpVaultAttached && lpRollSellersPinned && wrapperSetupClosed;
+  const lpReady =
+    sameAddress(health.lpVault.manager, manifest.contracts.lpKeeper) &&
+    lpVaultAttached &&
+    lpRollSellersPinned &&
     health.lpVault.sharePriceWad > 0n &&
     (!health.lpVault.strategyActive || (health.lpInventory || []).some((item) => item.hasInventory));
   const wrappersReady = Object.entries(health.wrappers).every(([key, wrapper]) => {
@@ -1546,10 +1555,30 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
     ? baseSettlementReady && medianOracleMatchesMainnetConfig(health.medianOracle)
     : baseSettlementReady;
 
+  addCheck(
+    checks,
+    oneTimeSetupClosed ? "pass" : "fail",
+    "decentralized",
+    "one-time deployment setup is closed",
+    oneTimeSetupClosed
+      ? "LP keeper, roll sellers, and wrapper keepers are pinned, so deploy-time setup hooks cannot retarget the live MVP."
+      : "Deployment setup is still open or miswired; finish/pin keeper and wrapper setup before treating the MVP as no-admin.",
+    {
+      lpVaultAttached,
+      lpRollSellersPinned,
+      wrapperSetupClosed,
+      lpKeeperVault: health.lpKeeper?.vault,
+      lpVault: manifest.contracts.lpVault,
+      steadyRollSeller: health.lpKeeper?.steadyRollSeller,
+      boostedRollSeller: health.lpKeeper?.boostedRollSeller,
+    },
+  );
+
   const missing = [];
   if (!marketsReady) missing.push("trader AMM liquidity/quotes");
   if (!lpReady) missing.push("LP vault keeper/account visibility");
   if (!wrappersReady) missing.push("wrapper keeper wiring");
+  if (!oneTimeSetupClosed) missing.push("one-time deployment setup closure");
   if (!auctionReady) missing.push("auction lifecycle permissions");
   if (!solverReady) missing.push("external solver helper");
   if (!settlementReady) missing.push("settlement oracle wiring");
@@ -1566,6 +1595,7 @@ function checkDecentralizedLiveness(checks, manifest, health, rpcChainId, args) 
       marketsReady,
       lpReady,
       wrappersReady,
+      oneTimeSetupClosed,
       auctionReady,
       guardian: health.auctionPolicy.guardian,
       solverReady,
